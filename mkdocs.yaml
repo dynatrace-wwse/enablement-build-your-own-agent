@@ -1,0 +1,15 @@
+INHERIT: mkdocs-base.yaml
+# TODO(starter): the training's display name (Orbital's catalog shows it; mkdocs warns about the unknown key — expected).
+training_name: "Starter Training"
+
+# TODO(starter): site_name = "Dynatrace Enablement Lab: <training name>", repo_url = your repo.
+site_name: "Dynatrace Enablement Lab: Starter Training"
+repo_name: "View Code on GitHub"
+repo_url: "https://github.com/dynatrace-wwse/enablement-training-starter"
+# Every nav entry is one step in the app, in this order. Rename the files to say what each step does.
+nav:
+  - "Welcome": index.md
+  - "Prerequisites": prerequisites.md
+  - "1. Check the Environment": 1-environment-check.md
+  - "2. Scale the App": 2-scale-the-app.md
+  - "Resources": resources.md

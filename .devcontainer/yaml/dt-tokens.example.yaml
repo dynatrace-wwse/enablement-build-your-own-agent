@@ -1,0 +1,34 @@
+# Example only: NOTHING reads this file. It is named .example so the starter mints the
+# framework's default token pair (operator + ingest), which most trainings need.
+#
+# TODO(starter): decide, then delete this TODO line —
+#   - The default pair is enough   -> delete this file.
+#   - Your training needs other    -> rename it to dt-tokens.yaml (same folder) and keep
+#     Dynatrace token scopes          ONLY the tokens and scopes your steps use (least privilege).
+#
+# Why not ship a commented-out dt-tokens.yaml: an empty `tokens:` list does NOT fall back to the
+# framework default, and the linter refuses it. A repo file is all-or-nothing: list every token
+# the training needs, including the operator/ingest pair if post-create.sh deploys Dynatrace.
+#
+# Reference: https://dynatrace-wwse.github.io/enablement-app-training-template/02-automation/
+migrationStatus: pending
+
+tokens:
+  - name_suffix: operator
+    env_var: DT_OPERATOR_TOKEN
+    scopes:
+      - activeGateTokenManagement.create
+      - activeGateTokenManagement.write
+      - entities.read
+      - settings.read
+      - settings.write
+      - DataExport
+      - InstallerDownload
+
+  - name_suffix: ingest
+    env_var: DT_INGEST_TOKEN
+    scopes:
+      - metrics.ingest
+      - logs.ingest
+      - events.ingest
+      - openTelemetryTrace.ingest

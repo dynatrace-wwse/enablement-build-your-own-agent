@@ -1,0 +1,29 @@
+{
+  "templateVersion": "1.0.0",
+  "id": "starter-quiz",
+  "category": "CO",
+  "title": "TODO(starter): <Training name> — Knowledge Check",
+  "description": "TODO(starter): one sentence on what the assessment validates. Rename the file and the id together, and the LAB_QUESTIONAIRE line on the last step.",
+  "difficulty": "beginner",
+  "estimatedTime": 5,
+  "questions": [
+    {
+      "id": "q1",
+      "type": "multiple-choice",
+      "title": "Replicas",
+      "content": "Why run more than one replica of a deployment?",
+      "options": [
+        {"id": "a", "text": "So the application stays up when one pod fails", "isCorrect": true, "explanation": "Kubernetes keeps the other replicas serving while it replaces the failed pod."},
+        {"id": "b", "text": "So each pod gets more CPU", "isCorrect": false, "explanation": "Replicas add pods; CPU per pod is set by resource requests and limits."},
+        {"id": "c", "text": "So the cluster adds a node", "isCorrect": false, "explanation": "Replicas do not add nodes; the cluster's node count is managed separately."}
+      ],
+      "correctAnswer": "a",
+      "explanation": "More replicas keep the application available when a pod fails.",
+      "points": 1000,
+      "hints": ["Think about what happens when one pod fails."]
+    }
+  ],
+  "maxScore": 1000,
+  "tags": ["starter"],
+  "learningObjectives": ["Explain why a deployment runs more than one replica."]
+}
