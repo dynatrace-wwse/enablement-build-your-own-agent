@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shared-infrastructure workshop: runs ONCE on the shared box (209 contract: WORKSHOP_ROLE=shared).
+# Shared-infrastructure workshop: runs ONCE on the shared box (209 contract: ORBITAL_SHARED_ROLE=shared).
 # Builds every cluster, app and Dynatrace deployment the learners' tenant will see. The box may
 # be built hours or days before the workshop, so the tenant already holds data and problems.
 # Re-runnable: every step attaches to what exists instead of failing on it.
@@ -9,10 +9,10 @@ source .devcontainer/util/source_framework.sh
 setUpTerminal
 installK9s
 
-if [[ "${WORKSHOP_ROLE:-}" != "shared" ]]; then
-  printWarn "WORKSHOP_ROLE is '${WORKSHOP_ROLE:-unset}', not 'shared' — building the shared box anyway (manual or local run)"
+if [[ "${ORBITAL_SHARED_ROLE:-}" != "shared" ]]; then
+  printWarn "ORBITAL_SHARED_ROLE is '${ORBITAL_SHARED_ROLE:-unset}', not 'shared' — building the shared box anyway (manual or local run)"
 fi
-printInfo "Workshop id: ${DT_WORKSHOP_ID:-<none>}  session id for cluster names: $(getDtSessionId)"
+printInfo "Workshop id: ${ORBITAL_WORKSHOP_ID:-<none>}  session id for cluster names: $(getDtSessionId)"
 
 # Cluster 1 — "shop": the OpenTelemetry demo shop, traces and logs over OTLP.
 byoaUseCluster shop
