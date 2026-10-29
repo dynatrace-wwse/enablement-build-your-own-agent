@@ -81,7 +81,7 @@ Checks that need platform work are written in the pages as `<!-- PENDING_CHECK �
 | Id | Contract | Status |
 |---|---|---|
 | C-FILES | `.devcontainer/workshop-post-create.sh` runs once on the shared box, `workshop-post-start.sh` on every start; framework sync treats both as repo-owned | proposed by 209, written here |
-| C-ENV | shared box env: `ORBITAL_SHARED_ROLE=shared`, `ORBITAL_WORKSHOP_ID=ws_…, `ORBITAL_JOB_KIND=workshop``, `DT_HOSTGROUP=ws-<hex>-<stamp>`, operator and ingest tokens only (no monaco or dtctl token) | proposed |
+| C-ENV | shared box env: `ORBITAL_SHARED_ROLE=shared`, `ORBITAL_WORKSHOP_ID=ws_…`, `ORBITAL_JOB_KIND=workshop`, `DT_HOSTGROUP=ws-<6hex>-<stamp>` (contract v0.2), operator and ingest tokens only (no monaco or dtctl token) | proposed |
 | C-ACCESS | learners have no seat and no terminal (`studentShell=0`, `personalSeats=0`); only the trainer can shell into the box | proposed |
 | C-KEY | `{{DT_SEED_SCOPE}}` resolves for a learner who has no seat; a neutral alias `{{DT_USER_KEY}}` is proposed | resolves today (209); alias open |
 | C-WSID | `{{DT_WORKSHOP_SESSION_ID}}`, the shared box's `DT_HOSTGROUP`, to scope data queries to this workshop's clusters | open; this repo does not use it yet |
