@@ -1,15 +1,17 @@
 INHERIT: mkdocs-base.yaml
-# TODO(starter): the training's display name (Orbital's catalog shows it; mkdocs warns about the unknown key — expected).
-training_name: "Starter Training"
-
-# TODO(starter): site_name = "Dynatrace Enablement Lab: <training name>", repo_url = your repo.
-site_name: "Dynatrace Enablement Lab: Starter Training"
+# The training's display name (Orbital's catalog shows it; mkdocs warns about the unknown key — expected).
+training_name: "Build Your Own Observability Agent with Dynatrace"
+site_name: "Dynatrace Enablement Lab: Build Your Own Observability Agent"
 repo_name: "View Code on GitHub"
-repo_url: "https://github.com/dynatrace-wwse/enablement-training-starter"
-# Every nav entry is one step in the app, in this order. Rename the files to say what each step does.
+repo_url: "https://github.com/dynatrace-wwse/enablement-build-your-own-agent"
 nav:
   - "Welcome": index.md
-  - "Prerequisites": prerequisites.md
-  - "1. Check the Environment": 1-environment-check.md
-  - "2. Scale the App": 2-scale-the-app.md
+  - "1.1 Assist and skills": 1-1-assist-and-skills.md
+  - "1.2 Notebooks, dashboards, Pages": 1-2-notebooks-dashboards-pages.md
+  - "1.3 Preview: dtctl and MCP": 1-3-dtctl-mcp-preview.md
+  - "2.1 Build your agent": 2-1-custom-agent.md
+  - "2.2 Call it from Assist": 2-2-trigger-via-assist.md
+  - "2.3 Agentic workflow": 2-3-agentic-workflow.md
+  - "3.1 Guardrails and cost": 3-1-guardrails-and-cost.md
+  - "3.2 Validate and roll out": 3-2-validate-and-roll-out.md
   - "Resources": resources.md

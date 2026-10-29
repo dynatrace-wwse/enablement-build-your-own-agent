@@ -1,0 +1,35 @@
+#!/bin/bash
+# Shared-infrastructure workshop: runs ONCE on the shared box (209 contract: WORKSHOP_ROLE=shared).
+# Builds every cluster, app and Dynatrace deployment the learners' tenant will see. The box may
+# be built hours or days before the workshop, so the tenant already holds data and problems.
+# Re-runnable: every step attaches to what exists instead of failing on it.
+export SECONDS=0
+source .devcontainer/util/source_framework.sh
+
+setUpTerminal
+installK9s
+
+if [[ "${WORKSHOP_ROLE:-}" != "shared" ]]; then
+  printWarn "WORKSHOP_ROLE is '${WORKSHOP_ROLE:-unset}', not 'shared' — building the shared box anyway (manual or local run)"
+fi
+printInfo "Workshop id: ${DT_WORKSHOP_ID:-<none>}  session id for cluster names: $(getDtSessionId)"
+
+# Cluster 1 — "shop": the OpenTelemetry demo shop, traces and logs over OTLP.
+byoaUseCluster shop
+byoaDeployDynatrace shop
+deployAstroshop
+
+# Cluster 2 — "ops": easytrade (has a DB we break), the todoapp, and the chaos namespace.
+byoaUseCluster ops
+byoaDeployDynatrace ops
+deployEasyTrade
+deployTodoApp
+
+# Faults and traffic. workshop-post-start.sh restarts both on every start; starting them here
+# too means a box built days ahead produces problems from the first hour.
+startProblemGenerator
+startTodoTraffic
+
+checkSharedBoxReady
+printInfo "Shared box built in ${SECONDS}s"
+finalizePostCreation
