@@ -71,7 +71,46 @@ setup() {
   local f name
   for f in "${BYOA_FAULTS[@]}"; do
     name="${f#* }"
-    grep -q "^    ${name})" "$REPO_PATH/.devcontainer/util/my_functions.sh"
+    [[ "$name" == flag:* ]] && name='flag:\*'
     [ "$(grep -c "^    ${name})" "$REPO_PATH/.devcontainer/util/my_functions.sh")" -eq 2 ]
   done
+}
+
+@test "every flag fault names a flag that astroshop's flagd config defines" {
+  # FRAMEWORK_DIR: a codespaces-framework checkout (set on the dev box and in CI)
+  local yaml="${FRAMEWORK_DIR:-/nonexistent}/.devcontainer/apps/astroshop/yaml/astroshop-deployment.yaml"
+  [ -f "$yaml" ] || skip "FRAMEWORK_DIR not set to a codespaces-framework checkout"
+  local f n=0
+  for f in "${BYOA_FAULTS[@]}"; do
+    [[ "${f#* }" == flag:* ]] || continue
+    grep -q "^        \"${f#* flag:}\": {" "$yaml"
+    n=$((n + 1))
+  done
+  [ "$n" -ge 1 ]
+}
+
+@test "byoaFlag sets only that flag's defaultVariant and restarts flagd" {
+  export CALLS="$BATS_TEST_TMPDIR/calls"
+  kubectl() {
+    echo "$*" >> "$CALLS"
+    case "$*" in
+      *"get cm flagd-config"*) echo '{"flags":{"adHighCpu":{"defaultVariant":"off"},"cartFailure":{"defaultVariant":"off"}}}' ;;
+      *"create cm flagd-config"*) echo "$*" > "$BATS_TEST_TMPDIR/created" ;;
+    esac
+  }
+  export -f kubectl
+  byoaFlag k3d-byoa-shop adHighCpu on
+  grep -q '"adHighCpu":{"defaultVariant":"on"}' "$BATS_TEST_TMPDIR/created"
+  grep -q '"cartFailure":{"defaultVariant":"off"}' "$BATS_TEST_TMPDIR/created"
+  grep -q "rollout restart deploy flagd" "$CALLS"
+  byoaFlag k3d-byoa-shop adHighCpu off
+  grep -q '"adHighCpu":{"defaultVariant":"off"}' "$BATS_TEST_TMPDIR/created"
+}
+
+@test "the chaos loop stops and says so at the hour cap" {
+  kubectl() { :; }; export -f kubectl
+  BYOA_CHAOS_MAX_HOURS=0 run byoaChaosLoop
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cap reached"* ]]
+  [[ "$output" != *"inject"* ]]
 }

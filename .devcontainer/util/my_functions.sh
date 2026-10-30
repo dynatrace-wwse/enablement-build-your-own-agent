@@ -107,13 +107,47 @@ BYOA_CHAOS_PID="${BYOA_CHAOS_PID:-$HOME/.byoa-chaos.pid}"
 BYOA_CHAOS_LOG="${BYOA_CHAOS_LOG:-$HOME/.byoa-chaos.log}"
 BYOA_CHAOS_PERIOD="${BYOA_CHAOS_PERIOD:-1200}"   # seconds per fault window (20 min)
 
+BYOA_CHAOS_MAX_HOURS="${BYOA_CHAOS_MAX_HOURS:-36}"  # the loop heals and exits after this (the box cap)
+
 # The faults, round-robin. Each is "<cluster> <name>" and has an inject and a heal step.
-BYOA_FAULTS=("ops crashloop" "ops errorburst" "shop memoryhog" "ops dbdown")
+# The mix copies the Playground idea: services, containers and a database with CPU, memory,
+# error, latency, traffic and availability problems. "flag:<name>" turns on one of
+# astroshop's built-in fault flags (flagd); the others are pods in the `chaos` namespace or
+# an easytrade change. Order alternates clusters and kinds so no two windows look alike.
+BYOA_FAULTS=(
+  "shop flag:adHighCpu"            # CPU: ad service burns CPU
+  "ops crashloop"                  # availability: CrashLoopBackOff
+  "shop flag:paymentFailure"       # errors: payment fails a share of requests
+  "ops cpuhog"                     # CPU: container throttled at its limit
+  "shop memoryhog"                 # memory: OOMKilled container
+  "shop flag:kafkaQueueProblems"   # latency: queue lag between checkout and consumers
+  "ops errorburst"                 # errors: error log burst
+  "shop flag:adManualGc"           # memory: forced full GCs in the ad service
+  "ops dbdown"                     # availability: easytrade database gone
+  "shop flag:imageSlowLoad"        # latency: slow images behind the frontend proxy
+  "shop flag:loadgeneratorFloodHomepage"  # traffic: request flood on the homepage
+)
+
+# byoaFlag <ctx> <flag> on|off — set a flag's defaultVariant in astroshop's flagd-config
+# ConfigMap and restart flagd, whose init container copies the ConfigMap into its working file.
+byoaFlag() {
+  local ctx="$1" flag="$2" variant="$3" json
+  json=$(kubectl --context "$ctx" -n astroshop get cm flagd-config -o jsonpath='{.data.demo\.flagd\.json}') || return 1
+  json=$(jq -c --arg f "$flag" --arg v "$variant" '.flags[$f].defaultVariant = $v' <<<"$json") || return 1
+  kubectl --context "$ctx" -n astroshop create cm flagd-config --from-literal=demo.flagd.json="$json" \
+    --dry-run=client -o yaml | kubectl --context "$ctx" -n astroshop apply -f - >/dev/null || return 1
+  kubectl --context "$ctx" -n astroshop rollout restart deploy flagd >/dev/null
+}
 
 byoaFaultInject() {
   local cluster="$1" fault="$2"
   local ctx="k3d-byoa-${cluster}"
   case "$fault" in
+    flag:*)     byoaFlag "$ctx" "${fault#flag:}" on ;;
+    cpuhog)     # two busy loops under a 200m limit — the container is throttled all the time
+      kubectl --context "$ctx" -n chaos create deploy pricing-worker --image=busybox:1.36 \
+        -- sh -c 'yes >/dev/null & yes >/dev/null & wait' 2>/dev/null || true
+      kubectl --context "$ctx" -n chaos set resources deploy pricing-worker --limits=cpu=200m >/dev/null 2>&1 || true ;;
     crashloop)  # a deployment whose container exits — CrashLoopBackOff, pod restarts
       kubectl --context "$ctx" -n chaos create deploy payment-retry --image=busybox:1.36 \
         -- sh -c 'echo "FATAL payment-retry: cannot reach ledger"; exit 1' 2>/dev/null || true ;;
@@ -147,6 +181,8 @@ byoaFaultHeal() {
   local cluster="$1" fault="$2"
   local ctx="k3d-byoa-${cluster}"
   case "$fault" in
+    flag:*)     byoaFlag "$ctx" "${fault#flag:}" off ;;
+    cpuhog)     kubectl --context "$ctx" -n chaos delete deploy pricing-worker --ignore-not-found >/dev/null 2>&1 ;;
     crashloop)  kubectl --context "$ctx" -n chaos delete deploy payment-retry --ignore-not-found >/dev/null 2>&1 ;;
     errorburst) kubectl --context "$ctx" -n chaos delete deploy checkout-gateway --ignore-not-found >/dev/null 2>&1 ;;
     memoryhog)  kubectl --context "$ctx" -n chaos delete deploy recommendation-cache --ignore-not-found >/dev/null 2>&1 ;;
@@ -161,7 +197,8 @@ byoaChaosLoop() {
   for c in "${BYOA_CLUSTERS[@]}"; do
     kubectl --context "k3d-byoa-${c%%:*}" create ns chaos >/dev/null 2>&1 || true
   done
-  while true; do
+  local deadline=$(( $(date +%s) + BYOA_CHAOS_MAX_HOURS * 3600 ))
+  while (( $(date +%s) < deadline )); do
     read -r cluster fault <<<"${BYOA_FAULTS[$((i % n))]}"
     echo "$(date -u +%FT%TZ) inject $cluster/$fault"
     byoaFaultInject "$cluster" "$fault"
@@ -171,6 +208,7 @@ byoaChaosLoop() {
     sleep $((BYOA_CHAOS_PERIOD / 4))
     i=$((i + 1))
   done
+  echo "$(date -u +%FT%TZ) stop   ${BYOA_CHAOS_MAX_HOURS}h cap reached"
 }
 
 isProblemGeneratorRunning() {

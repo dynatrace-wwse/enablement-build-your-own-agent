@@ -17,12 +17,12 @@ This session is for platform engineers, SREs and observability leads who already
 
 ## How this workshop works
 
-Everyone in the room works in **one shared Dynatrace tenant**. Your trainer's machine has been running for hours and keeps generating real telemetry for the tenant to analyse:
+Everyone in the room works in **one shared Dynatrace tenant**. Your trainer's machine has been running since the day before and keeps generating real telemetry for the tenant to analyse:
 
 - two Kubernetes clusters
 - a shop
 - a trading app
-- a fault injector that breaks something every twenty minutes
+- a fault injector that breaks something new every twenty minutes: CPU, memory, errors, latency, traffic, outages
 
 You do everything in the Dynatrace UI. There is no terminal for you to use.
 
