@@ -1,23 +1,18 @@
 ---
-# TODO(starter): fill every field. They feed the catalog card; the learner never sees them.
 description: "Scale a Kubernetes deployment and verify the result from the learner's own environment."
-tags: [starter, kubernetes]
+tags: [kubernetes, perform]
 difficulty: beginner # beginner | intermediate | advanced | expert
 duration: 20 # minutes, measured on a real run, not estimated
 ---
 
-# Starter Training
-
-<!-- TODO(starter): replace the title and the three sections below with your training's. -->
+# Build Your Own Observability Agent with Dynatrace
 
 ## What you will be able to do
 
-<!-- TODO(starter): ONE sentence: what the learner can do at the end that they could not do before. -->
 By the end of this training you can scale a Kubernetes deployment and prove that every replica is running.
 
 ## Who it is for
 
-<!-- TODO(starter): the audience and what they must already know. -->
 Engineers who are new to Kubernetes and know how to use a terminal.
 
 ## How it works
