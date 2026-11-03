@@ -22,23 +22,32 @@ A Perform hands-on session (175 min): Assist and skills, custom agents built in 
 │ workshop-post-create.sh  (once)            │   │ Assist · Knowledge Base · Agent Studio│
 │ workshop-post-start.sh   (every start)     │   │ Notebooks · Dashboards · Pages        │
 │                                            │   │ Workflows (Run agent action)          │
-│ k3d byoa-shop  astroshop + DynaKube ───────┼──▶│                                       │
+│ k3d byoa-shop  astroshop, hipstershop      │   │                                       │
+│                + DynaKube ─────────────────┼──▶│                                       │
 │ k3d byoa-ops   easytrade, todoapp,         │   │ every learner object carries the      │
 │                chaos ns + DynaKube ────────┼──▶│ learner key {{DT_SEED_SCOPE}}         │
+│ k3d byoa-sec   unguard (+ attacks)         │   │                                       │
+│                + DynaKube ─────────────────┼──▶│                                       │
+│ load shaper (hourly, 24 h curve, ≤36 h)    │   │                                       │
 │ problem generator (detached loop, ≤36 h):  │   └───────────────────────────────────────┘
-│   11 faults: CPU, memory, errors, latency,
+│   14 faults: CPU, memory, errors, latency,
 │   traffic, availability; 20 min each, then heal
 └────────────────────────────────────────────┘
 ```
 
 - **The box seeds the trainer's tenant.** It starts about **24 h before** the class and runs for **36 h at most**, unless the trainer schedules longer. By the time the class starts, Grail already holds a day of data and Davis has opened and closed problems of every kind. Every script is idempotent and safe to restart. `workshop-post-start.sh` re-reads the tokens on every start (`DECISIONS.md` D-13).
 - **Two clusters, one DynaKube each.** The framework names a DynaKube `<repo>-<getDtSessionId>`, and two clusters would collide on that name. `byoaDeployDynatrace` therefore makes the id per cluster for the duration of the call (`shop-<id>`, `ops-<id>`). This is a workaround until the framework takes a cluster name (ENH-146 phase 7).
-- **Ports** are 30080/30443/6450 (shop) and 31080/31443/6451 (ops), so the box never competes with a host nginx for 80/443.
+- **Ports** are 30080/30443/6450 (shop), 31080/31443/6451 (ops) and 32080/32443/6452 (sec), so the box never competes with a host nginx for 80/443.
+- **Apps and traffic over time** (`DECISIONS.md` D-14):
+  - Five apps run in three clusters.
+  - A load shaper follows a 24-hour curve, so the tenant shows a working day rather than flat lines.
+  - Every hour, `~/.byoa-footprint.log` records CPU and memory per namespace and the host's free memory. Size the box from that log.
 - **Problem generator: a Playground-like mix** (`DECISIONS.md` D-12).
-  - `BYOA_FAULTS` rotates through 11 faults:
+  - `BYOA_FAULTS` rotates through 14 faults:
     - six of astroshop's built-in flagd fault flags (`adHighCpu`, `adManualGc`, `paymentFailure`, `kafkaQueueProblems`, `imageSlowLoad`, `loadgeneratorFloodHomepage`)
     - CPU throttling, OOM, CrashLoopBackOff and an error-log burst in the `chaos` namespace
     - easytrade's database going down
+    - hipstershop's currency service CPU-capped, its Redis cart store down, and unguard's database down
   - `startProblemGenerator` and `stopProblemGenerator` in `.devcontainer/util/my_functions.sh` manage it. The generator keeps a pid file and a log at `~/.byoa-chaos.log`.
   - Each fault runs for `BYOA_CHAOS_PERIOD` (default 1200 s), and every fault has a heal step.
   - After `BYOA_CHAOS_MAX_HOURS` (default 36) the generator heals and exits.
@@ -126,7 +135,7 @@ Checks that need platform work are written in the pages as `<!-- PENDING_CHECK �
 ## Tests
 
 ```bash
-FRAMEWORK_DIR=<codespaces-framework checkout> bats .devcontainer/test/shared-box.bats   # helpers, no cluster (12 tests)
+FRAMEWORK_DIR=<codespaces-framework checkout> bats .devcontainer/test/shared-box.bats   # helpers, no cluster (19 tests)
 bash -n .devcontainer/*.sh .devcontainer/util/my_functions.sh
 ```
 

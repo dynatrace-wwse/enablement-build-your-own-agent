@@ -14,10 +14,12 @@ if [[ "${ORBITAL_SHARED_ROLE:-}" != "shared" ]]; then
 fi
 printInfo "Workshop id: ${ORBITAL_WORKSHOP_ID:-<none>}  session id for cluster names: $(getDtSessionId)"
 
-# Cluster 1 — "shop": the OpenTelemetry demo shop, traces and logs over OTLP.
+# Cluster 1 — "shop": the OpenTelemetry demo shop (traces and logs over OTLP) and the
+# Online Boutique (hipstershop), traced by OneAgent.
 byoaUseCluster shop
 byoaDeployDynatrace shop
 deployAstroshop
+byoaDeployHipsterShop
 
 # Cluster 2 — "ops": easytrade (has a DB we break), the todoapp, and the chaos namespace.
 byoaUseCluster ops
@@ -25,10 +27,18 @@ byoaDeployDynatrace ops
 deployEasyTrade
 deployTodoApp
 
-# Faults and traffic. workshop-post-start.sh restarts both on every start; starting them here
-# too means a box built days ahead produces problems from the first hour.
+# Cluster 3 — "sec": unguard, an intentionally vulnerable social app, attacked by its own
+# malicious load generator: vulnerabilities and attacks for Assist to explain.
+byoaUseCluster sec
+byoaDeployDynatrace sec
+byoaDeployUnguard
+
+# Faults, traffic and the day curve. workshop-post-start.sh restarts all three on every start;
+# starting them here too means a box built a day ahead produces problems from the first hour.
 startProblemGenerator
 startTodoTraffic
+startLoadShaper
+byoaFootprint
 
 checkSharedBoxReady
 printInfo "Shared box built in ${SECONDS}s"

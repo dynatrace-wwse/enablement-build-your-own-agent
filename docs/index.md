@@ -3,6 +3,9 @@ description: "Use Dynatrace Assist, skills and your own agents in the tenant. Th
 tags: [ai, agents, assist, workflows, perform]
 difficulty: intermediate
 duration: 175 # minutes: intro 10 · part 1 60 · break 5 · part 2 70 · part 3 30
+delivery:
+  availability: workshop-only   # it has a shared box (workshop-post-create.sh): ENH-152
+  tenancy: single               # trainer and learners on the trainer's tenant
 ---
 
 # Build Your Own Observability Agent with Dynatrace
@@ -19,9 +22,9 @@ This session is for platform engineers, SREs and observability leads who already
 
 Everyone in the room works in **one shared Dynatrace tenant**. Your trainer's machine has been running since the day before and keeps generating real telemetry for the tenant to analyse:
 
-- two Kubernetes clusters
-- a shop
-- a trading app
+- three Kubernetes clusters
+- two web shops, a trading app, a to-do service and a deliberately vulnerable social network, written in Java, Go, .NET, Node.js, Python and PHP
+- traffic that follows a working day: quiet at night, busy at noon
 - a fault injector that breaks something new every twenty minutes: CPU, memory, errors, latency, traffic, outages
 
 You do everything in the Dynatrace UI. There is no terminal for you to use.

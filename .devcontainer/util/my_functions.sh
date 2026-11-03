@@ -54,13 +54,18 @@ byoaClusterName() {
 
 # ── The shared box layout ────────────────────────────────────────────
 #
-#   cluster   short  apps                          host ports (http/https/api)
-#   shop      shop   astroshop (OTel demo)         30080 / 30443 / 6450
-#   ops       ops    easytrade, todoapp, chaos     31080 / 31443 / 6451
+#   cluster   short  apps                               host ports (http/https/api)
+#   shop      shop   astroshop (OTel demo), hipstershop 30080 / 30443 / 6450
+#   ops       ops    easytrade, todoapp, chaos          31080 / 31443 / 6451
+#   sec       sec    unguard (+ its attack generator)   32080 / 32443 / 6452
+#
+# A Playground-like mix (DECISIONS.md D-12, D-14): web shops, a trading app, a CRUD service and an
+# intentionally vulnerable social app, in Java, Go, .NET, Node.js, Python, PHP and C++, with
+# MariaDB, Postgres, Redis, RabbitMQ and Kafka. Each app ships its own load generator.
 #
 # Ports avoid 80/443/6443 so the box never fights a host nginx (same reason Orbital's
 # ops server uses 30080/30443/6444 — functions.sh createK3dCluster header).
-BYOA_CLUSTERS=("shop:30080:30443:6450" "ops:31080:31443:6451")
+BYOA_CLUSTERS=("shop:30080:30443:6450" "ops:31080:31443:6451" "sec:32080:32443:6452")
 
 # byoaUseCluster <short> — create/attach the k3d cluster and make it the current context.
 byoaUseCluster() {
@@ -126,6 +131,9 @@ BYOA_FAULTS=(
   "ops dbdown"                     # availability: easytrade database gone
   "shop flag:imageSlowLoad"        # latency: slow images behind the frontend proxy
   "shop flag:loadgeneratorFloodHomepage"  # traffic: request flood on the homepage
+  "shop currencythrottle"          # CPU: hipstershop's currency service capped at 50m — checkout slows
+  "sec unguarddbdown"              # availability: unguard's MariaDB gone — posts and logins fail
+  "shop redisdown"                 # availability: hipstershop's cart store gone — cart errors
 )
 
 # byoaFlag <ctx> <flag> on|off — set a flag's defaultVariant in astroshop's flagd-config
@@ -144,6 +152,12 @@ byoaFaultInject() {
   local ctx="k3d-byoa-${cluster}"
   case "$fault" in
     flag:*)     byoaFlag "$ctx" "${fault#flag:}" on ;;
+    currencythrottle)
+      kubectl --context "$ctx" -n hipstershop set resources deploy currencyservice --limits=cpu=50m >/dev/null 2>&1 || true ;;
+    unguarddbdown)
+      kubectl --context "$ctx" -n unguard scale statefulset unguard-mariadb --replicas=0 >/dev/null 2>&1 || true ;;
+    redisdown)
+      kubectl --context "$ctx" -n hipstershop scale deploy redis-cart --replicas=0 >/dev/null 2>&1 || true ;;
     cpuhog)     # two busy loops under a 200m limit — the container is throttled all the time
       kubectl --context "$ctx" -n chaos create deploy pricing-worker --image=busybox:1.36 \
         -- sh -c 'yes >/dev/null & yes >/dev/null & wait' 2>/dev/null || true
@@ -182,6 +196,11 @@ byoaFaultHeal() {
   local ctx="k3d-byoa-${cluster}"
   case "$fault" in
     flag:*)     byoaFlag "$ctx" "${fault#flag:}" off ;;
+    currencythrottle)  # the shipped manifest has no limits, so heal = remove them
+      kubectl --context "$ctx" -n hipstershop patch deploy currencyservice --type=json \
+        -p='[{"op":"remove","path":"/spec/template/spec/containers/0/resources/limits"}]' >/dev/null 2>&1 ;;
+    unguarddbdown) kubectl --context "$ctx" -n unguard scale statefulset unguard-mariadb --replicas=1 >/dev/null 2>&1 ;;
+    redisdown)  kubectl --context "$ctx" -n hipstershop scale deploy redis-cart --replicas=1 >/dev/null 2>&1 ;;
     cpuhog)     kubectl --context "$ctx" -n chaos delete deploy pricing-worker --ignore-not-found >/dev/null 2>&1 ;;
     crashloop)  kubectl --context "$ctx" -n chaos delete deploy payment-retry --ignore-not-found >/dev/null 2>&1 ;;
     errorburst) kubectl --context "$ctx" -n chaos delete deploy checkout-gateway --ignore-not-found >/dev/null 2>&1 ;;
@@ -255,6 +274,120 @@ startTodoTraffic() {
   echo $! > "$pidf"
 }
 
+# ── Apps beyond the framework defaults ───────────────────────────────
+# Idempotent wrappers: post-create may run again on a box that already has them.
+byoaDeployHipsterShop() {
+  kubectl get deploy frontend -n hipstershop >/dev/null 2>&1 || deployHipsterShop
+}
+
+# unguard with its malicious load generator on: attacks against itself, so the tenant holds
+# vulnerabilities AND attack data (needs Application Security on the tenant to show them).
+BYOA_UNGUARD_ATTACKS="${BYOA_UNGUARD_ATTACKS:-true}"
+byoaDeployUnguard() {
+  helm status unguard -n unguard >/dev/null 2>&1 || deployUnguard || return 1
+  helm upgrade unguard oci://ghcr.io/dynatrace-oss/unguard/chart/unguard --version 0.12.0 -n unguard \
+    --reuse-values --set maliciousLoadGenerator.enabled="$BYOA_UNGUARD_ATTACKS" >/dev/null
+}
+
+# ── Traffic over the day ─────────────────────────────────────────────
+# Real systems are busy at noon and quiet at night; a flat load gives Davis and Assist flat
+# lines. The shaper sets every load generator to a share of its peak once an hour, following
+# BYOA_LOAD_CURVE (percent per UTC hour 0..23). It changes a generator only when its value
+# changes, because each change restarts that generator's pod.
+BYOA_LOAD_CURVE=(30 25 20 20 20 25 35 50 70 85 95 100 100 95 100 100 95 85 70 60 50 45 40 35)
+BYOA_LOAD_PID="${BYOA_LOAD_PID:-$HOME/.byoa-load.pid}"
+BYOA_LOAD_LOG="${BYOA_LOAD_LOG:-$HOME/.byoa-load.log}"
+BYOA_LOAD_STATE="${BYOA_LOAD_STATE:-$HOME/.byoa-load.state}"
+BYOA_PEAK_ASTRO_USERS="${BYOA_PEAK_ASTRO_USERS:-20}"
+BYOA_PEAK_HIPSTER_USERS="${BYOA_PEAK_HIPSTER_USERS:-20}"
+BYOA_PEAK_EASYTRADE_GENS="${BYOA_PEAK_EASYTRADE_GENS:-3}"
+
+# byoaLoadTargets <percent> — "<astroshop users> <hipstershop users> <easytrade generators>", never 0
+byoaLoadTargets() {
+  local pct="$1" a h e
+  a=$(( BYOA_PEAK_ASTRO_USERS * pct / 100 ));   (( a < 2 )) && a=2
+  h=$(( BYOA_PEAK_HIPSTER_USERS * pct / 100 )); (( h < 2 )) && h=2
+  e=$(( (BYOA_PEAK_EASYTRADE_GENS * pct + 50) / 100 )); (( e < 1 )) && e=1
+  echo "$a $h $e"
+}
+
+byoaApplyLoad() {
+  local pct="$1" targets last=""
+  targets="$(byoaLoadTargets "$pct")"
+  [[ -f "$BYOA_LOAD_STATE" ]] && last="$(cat "$BYOA_LOAD_STATE")"
+  [[ "$targets" == "$last" ]] && return 0
+  read -r a h e <<<"$targets"
+  kubectl --context k3d-byoa-shop -n astroshop set env deploy/load-generator LOCUST_USERS="$a" >/dev/null 2>&1
+  kubectl --context k3d-byoa-shop -n hipstershop set env deploy/loadgenerator USERS="$h" >/dev/null 2>&1
+  kubectl --context k3d-byoa-ops -n easytrade scale deploy headlessloadgen --replicas="$e" >/dev/null 2>&1
+  echo "$targets" > "$BYOA_LOAD_STATE"
+  echo "$(date -u +%FT%TZ) load ${pct}%: astroshop users=$a hipstershop users=$h easytrade generators=$e"
+}
+
+# byoaLoadLoop — hourly: apply the curve, log the footprint. Heals to peak and exits at the cap.
+byoaLoadLoop() {
+  local deadline=$(( $(date +%s) + BYOA_CHAOS_MAX_HOURS * 3600 ))
+  while (( $(date +%s) < deadline )); do
+    byoaApplyLoad "${BYOA_LOAD_CURVE[$((10#$(date -u +%H)))]}"
+    byoaFootprint
+    sleep "${BYOA_LOAD_PERIOD:-3600}"
+  done
+  echo "$(date -u +%FT%TZ) stop   ${BYOA_CHAOS_MAX_HOURS}h cap reached"
+}
+
+isLoadShaperRunning() {
+  [[ -f "$BYOA_LOAD_PID" ]] && kill -0 "$(cat "$BYOA_LOAD_PID" 2>/dev/null)" 2>/dev/null
+}
+
+startLoadShaper() {
+  isLoadShaperRunning && return 0
+  local self="${REPO_PATH}/.devcontainer/util/my_functions.sh"
+  setsid bash -c "source '$self'; byoaLoadLoop" >>"$BYOA_LOAD_LOG" 2>&1 < /dev/null &
+  echo $! > "$BYOA_LOAD_PID"
+  sleep 1
+  isLoadShaperRunning || { printError "Load shaper did not stay up — see $BYOA_LOAD_LOG"; return 1; }
+  printInfo "Load shaper pid $(cat "$BYOA_LOAD_PID"), log $BYOA_LOAD_LOG"
+}
+
+stopLoadShaper() {
+  isLoadShaperRunning && { kill -- -"$(cat "$BYOA_LOAD_PID")" 2>/dev/null || kill "$(cat "$BYOA_LOAD_PID")" 2>/dev/null; }
+  rm -f "$BYOA_LOAD_PID" "$BYOA_LOAD_STATE"
+}
+
+# byoaFootprint — one line per namespace per cluster (CPU millicores, memory MiB) from
+# metrics-server (k3s ships it), plus the host's free memory: the headroom record for sizing.
+BYOA_FOOTPRINT_LOG="${BYOA_FOOTPRINT_LOG:-$HOME/.byoa-footprint.log}"
+byoaFootprint() {
+  local c short ts; ts="$(date -u +%FT%TZ)"
+  for c in "${BYOA_CLUSTERS[@]}"; do
+    short="${c%%:*}"
+    kubectl --context "k3d-byoa-${short}" top pods -A --no-headers 2>/dev/null \
+      | awk -v ts="$ts" -v cl="$short" '{cpu[$1]+=$3; mem[$1]+=$4}
+          END {for (n in cpu) printf "%s %s %s cpu=%dm mem=%dMi\n", ts, cl, n, cpu[n], mem[n]}'
+  done >> "$BYOA_FOOTPRINT_LOG"
+  awk -v ts="$ts" '/MemTotal/{t=$2} /MemAvailable/{a=$2} END {printf "%s host mem_total=%dMi mem_available=%dMi\n", ts, t/1024, a/1024}' \
+    /proc/meminfo >> "$BYOA_FOOTPRINT_LOG"
+  echo "$ts host load=$(cut -d' ' -f1-3 /proc/loadavg) cpus=$(nproc)" >> "$BYOA_FOOTPRINT_LOG"
+}
+
+# ── App secrets that carry a Dynatrace token ─────────────────────────
+# The framework restarts what reads the DynaKube's token Secret after a refresh (BUG-181), but
+# astroshop's OTel collector reads its OWN Secret, dt-credentials, which deployAstroshop creates
+# once. Rewrite it from the current tokens and restart its reader when the value changed.
+byoaRefreshAstroshopSecret() {
+  local ctx="k3d-byoa-shop" before after
+  [[ -z "${DT_INGEST_TOKEN:-}" || -z "${DT_OTEL_ENDPOINT:-}" ]] && return 0
+  before=$(kubectl --context "$ctx" -n astroshop get secret dt-credentials -o jsonpath='{.metadata.resourceVersion}' 2>/dev/null)
+  kubectl --context "$ctx" -n astroshop create secret generic dt-credentials \
+    --from-literal="DT_API_TOKEN=$DT_INGEST_TOKEN" --from-literal="DT_ENDPOINT=$DT_OTEL_ENDPOINT" \
+    --dry-run=client -o yaml | kubectl --context "$ctx" -n astroshop apply -f - >/dev/null || return 1
+  after=$(kubectl --context "$ctx" -n astroshop get secret dt-credentials -o jsonpath='{.metadata.resourceVersion}' 2>/dev/null)
+  [[ "$before" == "$after" ]] && return 0
+  printInfo "astroshop dt-credentials changed: restarting otel-collector"
+  kubectl --context "$ctx" -n astroshop rollout restart deploy otel-collector >/dev/null \
+    && kubectl --context "$ctx" -n astroshop rollout status deploy otel-collector --timeout=120s >/dev/null
+}
+
 # ── Trainer checks (the trainer's shell only; learners have none) ────
 checkSharedBoxReady() {
   local c ok=0
@@ -267,6 +400,7 @@ checkSharedBoxReady() {
     fi
   done
   isProblemGeneratorRunning && printInfo "problem generator: running" || { printError "problem generator: NOT running"; ok=1; }
+  isLoadShaperRunning && printInfo "load shaper: running" || { printError "load shaper: NOT running"; ok=1; }
   return $ok
 }
 

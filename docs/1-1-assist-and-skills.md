@@ -21,13 +21,13 @@ Open **Knowledge Base** and create a skill named **`{{DT_SEED_SCOPE}}-runbook`**
 ```markdown
 ---
 name: {{DT_SEED_SCOPE}}-runbook
-description: Triage runbook for the BYOA demo platform. Use when a workload in the shop or ops cluster crash-loops, runs out of memory, or logs errors at a high rate.
+description: Triage runbook for the BYOA demo platform. Use when a workload in the shop, ops or sec cluster crash-loops, runs out of memory, or logs errors at a high rate.
 ---
 # BYOA platform triage runbook
 
 ## Naming
-- Clusters: `*-shop-*` runs the storefront; `*-ops-*` runs trading (easytrade), todo and batch jobs.
-- Owners: `easytrade` → team Ledger, `astroshop` → team Storefront, `chaos` → platform on-call.
+- Clusters: `*-shop-*` runs two storefronts (astroshop, the Online Boutique); `*-ops-*` runs trading (easytrade), todo and batch jobs; `*-sec-*` runs unguard, a deliberately vulnerable social network under constant attack.
+- Owners: `easytrade` → team Ledger, `astroshop` and `hipstershop` → team Storefront, `unguard` → team AppSec, `chaos` → platform on-call.
 
 ## Crash loop
 1. Fetch the last 20 log lines of the workload; quote the line before the exit.

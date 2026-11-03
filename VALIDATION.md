@@ -44,7 +44,14 @@ Every `PENDING_CHECK` is a comment, so the importer ignores it. It becomes a `LA
 | Every flag fault names a flag that the framework's astroshop defines | bats, against `$FRAMEWORK_DIR` | Y | R-06 (a mutated flag name was caught) |
 | `byoaFlag` switches only that flag, on and off, then restarts flagd | bats with a stubbed `kubectl` | Y (logic) | R-06 (a mutation was caught) |
 | The generator heals and exits at the 36 h cap | bats | Y | R-06 (removing the cap made the test hang and fail) |
-| Davis opens a problem for each of the 11 faults | real box on a tenant | **N** | Needs the ENH-146 shared box. This is the first thing to run there. |
+| The load curve has 24 hours and peaks at 100; targets never reach 0 | bats | Y | R-08 |
+| The load shaper restarts a generator only when its target changes, and stops at the cap | bats | Y | R-08 (a mutation was caught) |
+| Every cluster has its own ports, and every fault targets a known cluster | bats | Y | R-08 (a mutation was caught) |
+| astroshop's own token Secret is rewritten, and the collector restarts only when the Secret changed | bats with a stubbed `kubectl` | Y (logic) | R-08 (a mutation was caught) |
+| `delivery` front matter accepted by the framework (ENH-152) | `sync check-delivery` | Y | R-08 |
+| Davis opens a problem for each of the 14 faults | real box on a tenant | **N** | Needs the ENH-146 shared box. This is the first thing to run there. |
+| The box fits m6a.4xlarge at peak load (`~/.byoa-footprint.log`) | real box | **N** | D-14 estimate: about 9 CPU and 36 GiB at peak |
+| hipstershop and unguard deploy beside astroshop and easytrade, three DynaKubes in one tenant | real box | **N** | as above |
 | A token refresh on restart reaches the DynaKubes | real box | **N** | as above |
 | Two DynaKubes from one box in one tenant | real box | **N** | as above |
 | `workshop-post-create.sh` end to end | real box | **N** | Docker needs root on the dev host, and the DT credentials cannot be read there by design |
@@ -60,3 +67,4 @@ Every `PENDING_CHECK` is a comment, so the importer ignores it. It becomes a `LA
 | R-05 | 2026-10-29 | `bats .devcontainer/test/shared-box.bats`: 9 tests. Mutation run: break the key cut, break the hostgroup restore | 9/9 pass. Each mutation failed its test. |
 | R-06 | 2026-10-30 | Playground-like fault mix, `byoaFlag`, 36 h cap, token re-read in post-start. `bats` now has 12 tests. Mutations: a wrong flag name; `byoaFlag` that always sets `on`; the cap removed; a missing heal branch | 12/12 pass. Each mutation failed its test. The first `byoaFlag` test let the always-`on` mutation through, so an `off` assertion was added; the mutation is now caught. |
 | R-07 | 2026-10-30 | Token refresh path, traced with 209 against fw `cff0018` and orbital `4f6c4bf`. A refreshed `.env` reaches `dynatraceEvalReadSaveCredentials` only when `.env` is re-sourced first and `DT_EVAL_SECRETS` is then unset. `variables.sh` sources `.env` without `set -a`. Local check: a variable new to `.env` reaches a child process after re-sourcing under `set -a` | `workshop-post-start.sh` now re-sources `.env` under `set -a` and then unsets `DT_EVAL_SECRETS`. The new variable reached the child. A trainer shell that is already open keeps the old tokens (209's A6 notes). |
+| R-08 | 2026-11-03 | D-14 apps, load shaper, footprint log, astroshop Secret refresh; ENH-152 `delivery`. bats now has 19 tests. Mutations: the refresh always restarts; apply ignores its state; no floor on the targets; a port clash; an unknown cluster; a missing heal branch; `isProblemGeneratorRunning` always true; stop that does not kill. `sync check-delivery` at fw `d57abd3`, with and without the block. `tg lint`. `mkdocs build --strict` | 19/19 pass, and every mutation failed a test. **Found and fixed a test bug:** a bats line like `! cmd` never fails a test (`set -e` ignores it), so 4 assertions (3 here, 1 in the test repo) had never been able to fail; they now use `run` and check the status. delivery rc 0, and rc 1 without the block. lint 0 errors / 12 warnings. mkdocs green. |

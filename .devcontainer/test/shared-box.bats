@@ -58,13 +58,15 @@ setup() {
   startProblemGenerator                      # idempotent: same pid
   [ "$(cat "$BYOA_CHAOS_PID")" = "$pid" ]
   stopProblemGenerator
-  ! kill -0 "$pid" 2>/dev/null
+  run kill -0 "$pid"
+  [ "$status" -ne 0 ]   # `! cmd` never fails a bats test (set -e ignores it)
   [ ! -f "$BYOA_CHAOS_PID" ]
 }
 
 @test "a stale pid file does not count as running" {
   echo 999999 > "$BYOA_CHAOS_PID"
-  ! isProblemGeneratorRunning
+  run isProblemGeneratorRunning
+  [ "$status" -ne 0 ]   # `! cmd` never fails a bats test (set -e ignores it)
 }
 
 @test "every fault has an inject and a heal branch" {
@@ -113,4 +115,74 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"cap reached"* ]]
   [[ "$output" != *"inject"* ]]
+}
+
+@test "the load curve covers 24 hours and peaks at 100" {
+  [ "${#BYOA_LOAD_CURVE[@]}" -eq 24 ]
+  local max=0 v
+  for v in "${BYOA_LOAD_CURVE[@]}"; do (( v > max )) && max=$v; (( v >= 1 && v <= 100 )); done
+  [ "$max" -eq 100 ]
+}
+
+@test "load targets scale with the curve and never reach zero" {
+  [ "$(byoaLoadTargets 100)" = "20 20 3" ]
+  [ "$(byoaLoadTargets 50)" = "10 10 2" ]
+  [ "$(byoaLoadTargets 1)" = "2 2 1" ]
+}
+
+@test "byoaApplyLoad changes the generators only when the targets change" {
+  export CALLS="$BATS_TEST_TMPDIR/calls"
+  kubectl() { echo "$*" >> "$CALLS"; }; export -f kubectl
+  byoaApplyLoad 100
+  [ "$(grep -c . "$CALLS")" -eq 3 ]
+  grep -q "LOCUST_USERS=20" "$CALLS"
+  grep -q "USERS=20" "$CALLS"
+  grep -q "headlessloadgen --replicas=3" "$CALLS"
+  byoaApplyLoad 100            # same targets: no restart
+  [ "$(grep -c . "$CALLS")" -eq 3 ]
+  byoaApplyLoad 30
+  [ "$(grep -c . "$CALLS")" -eq 6 ]
+}
+
+@test "the load shaper stops and says so at the hour cap" {
+  kubectl() { :; }; export -f kubectl
+  BYOA_CHAOS_MAX_HOURS=0 run byoaLoadLoop
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cap reached"* ]]
+  [[ "$output" != *"load "*"%"* ]]
+}
+
+@test "every cluster has its own ports and api port" {
+  local spec seen=" "
+  for spec in "${BYOA_CLUSTERS[@]}"; do
+    IFS=: read -r short http https api <<<"$spec"
+    for p in "$http" "$https" "$api"; do [[ "$seen" != *" $p "* ]]; seen+="$p "; done
+  done
+  [ "${#BYOA_CLUSTERS[@]}" -eq 3 ]
+}
+
+@test "every fault targets a known cluster" {
+  local f c known=" ${BYOA_CLUSTERS[*]%%:*} "
+  for f in "${BYOA_FAULTS[@]}"; do c="${f%% *}"; [[ "$known" == *" $c "* ]]; done
+}
+
+@test "the astroshop secret refresh restarts the collector only when the secret changed" {
+  export CALLS="$BATS_TEST_TMPDIR/calls" RV="$BATS_TEST_TMPDIR/rv"
+  export DT_INGEST_TOKEN=x DT_OTEL_ENDPOINT=y
+  echo 1 > "$RV"
+  kubectl() {
+    echo "$*" >> "$CALLS"
+    case "$*" in
+      *"get secret dt-credentials"*) cat "$RV" ;;
+      *"apply -f -"*) cat >/dev/null; if [[ -f "$RV.bump" ]]; then echo 2 > "$RV"; fi ;;
+      *"create secret"*) echo "kind: Secret" ;;
+    esac
+  }
+  export -f kubectl
+  byoaRefreshAstroshopSecret
+  run grep -q "rollout restart" "$CALLS"
+  [ "$status" -ne 0 ]   # `! cmd` never fails a bats test (set -e ignores it)
+  touch "$RV.bump"
+  byoaRefreshAstroshopSecret
+  grep -q "rollout restart deploy otel-collector" "$CALLS"
 }

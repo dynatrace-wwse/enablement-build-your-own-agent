@@ -14,6 +14,8 @@ Where things live:
 | D-10, D-11 | 2026-10-29 | 210, agreed with 209 (contract v0.1) | decided |
 | D-12 | 2026-10-30 | owner sets the goal, 210 the design | decided; the design is not yet run on a tenant |
 | D-13 | 2026-10-30 | owner (via 209, contract v0.3) | decided |
+| D-14 | 2026-11-03 | owner sets the goal, 210 the design | decided; not yet run on a box (staging is locked for the release) |
+| D-15 | 2026-11-03 | owner, ENH-152 (via orch/main) | decided |
 
 ---
 
@@ -132,7 +134,7 @@ Where things live:
     - `byoa-ops`: easytrade, the todoapp, and a `chaos` namespace
   - One DynaKube per cluster.
   - Each app's own load generator runs all the time.
-  - A problem generator rotates **11 faults**. Each runs 20 min, then 5 min healed:
+  - A problem generator rotates **11 faults** (14 since D-14). Each runs 20 min, then 5 min healed:
 
     | Kind | Faults |
     |---|---|
@@ -166,3 +168,74 @@ Where things live:
   - **Tokens are re-read on every start:**
     - Tokens are not assumed to outlive 36 h.
     - `workshop-post-start.sh` re-reads the credentials on every start and re-applies each DynaKube, whose manifest carries the token secret.
+
+## D-14 · More applications, running over time (extends D-12)
+
+- **Owner's ask (2026-11-03):**
+  - The shared box runs more applications over time, so the tenant holds more CPU, memory and other data.
+  - That gives learners more to explore with Assist.
+  - Research what the Playground runs and reuse what we can reach.
+- **Research (internal sources, summarised):**
+  - The Playground and its problem patterns belong to an internal demo team.
+  - The applications that team names are a travel site, the trading app (easytrade) and a cluster workload simulator.
+  - The travel site cannot run in containers and needs its own 6 GB VM.
+  - The simulator is an internal load-test tool with no user interface, and it is not public.
+  - The Playground's "live incident" demos are of the same kind as ours: a payment failure, an image-service slowdown, and disk and CPU problems.
+  - The intentionally vulnerable social app (unguard) is public (dynatrace-oss) and runs on Dynatrace's own security demo clusters.
+  - **Conclusion:** everything the Playground runs that we can reach is already a framework app.
+- **What changed:**
+  - **Apps**, three clusters, each with its own DynaKube:
+
+    | Cluster | Apps |
+    |---|---|
+    | `shop` | astroshop and hipstershop (Online Boutique) |
+    | `ops` | easytrade and the todoapp |
+    | `sec` | unguard, with its malicious load generator on |
+
+    Together they cover Java, Go, .NET, Node.js, Python, PHP and C++, with MariaDB, Postgres, Redis, RabbitMQ and Kafka.
+  - **Traffic over time:**
+    - A load shaper sets every load generator to a share of its peak once an hour.
+    - It follows a 24-hour curve: 20 % at night, 100 % at midday.
+    - It changes a generator only when the target changes, because a change restarts that pod.
+    - Davis and Assist then see daily seasonality instead of flat lines.
+  - **Faults:** 3 new ones, 14 in all:
+    - hipstershop's currency service capped at 50 m CPU
+    - unguard's database down
+    - hipstershop's Redis cart store down
+  - **Footprint log:**
+    - Every hour, `~/.byoa-footprint.log` records CPU and memory per namespace and the host's free memory.
+    - It is the headroom measurement for D-14's sizing.
+  - **Token refresh:**
+    - astroshop's OTel collector reads its own Secret (`dt-credentials`), which the framework's BUG-181 restart does not cover.
+    - `byoaRefreshAstroshopSecret` rewrites that Secret and restarts the collector when the value changed.
+    - A failed refresh fails `workshop-post-start.sh`.
+- **Sizing, against the allowed shape (m6a.4xlarge, 16 vCPU / 64 GiB, $0.80/h):**
+  - **Declared requests from the manifests and the chart:**
+
+    | App | CPU | Memory |
+    |---|---|---|
+    | astroshop | 1.0 | 4.3 GiB (limits 4.9 CPU / 9.5 GiB) |
+    | easytrade | 1.4 | 4.2 GiB |
+    | hipstershop | 0.55 | 1.1 GiB |
+    | unguard | 0.07 | 0.2 GiB, plus MariaDB |
+
+  - **Measured in the sprint tenant, per cluster, average over 30 days:** Dynatrace 0.2 CPU / 2.6 GiB, the todoapp 0.1 / 1.5 GiB, ingress 1.0 GiB, kube-system 0.4 GiB.
+  - Each of the three clusters carries its own Dynatrace, ingress and kube-system, which adds about 4 GiB per cluster.
+  - **Estimate:**
+    - Requests are about 4 CPU and 22 GiB.
+    - At the noon peak, with every limit reached, the box would use about 9 CPU and 36 GiB.
+    - Fault spikes come on top: `cpuhog` 0.2 CPU, the flood flag, and `memoryhog` up to 96 MiB.
+    - This leaves about 40 % of the box's memory free, and room for a shared LLM only if it is small.
+  - **The estimate must be confirmed with the footprint log** on the first staging run. Then decide whether a 4th app (opentelemetry-demo upstream or astroshop-lite) still fits.
+  - A bigger shape (r6a.4xlarge: 16 vCPU / 128 GiB) is an owner decision. It is not proposed yet.
+- **Left out, and why:**
+  - **The travel site:** not containerised, needs a 6 GB VM, internal.
+  - **The workload simulator:** internal, and it produces load-test data rather than an application.
+  - **gitlab:** heavy, and no observability story.
+  - **ai-travel-advisor:** needs an LLM.
+  - **opentelemetry-demo upstream:** duplicates astroshop.
+
+## D-15 · Delivery declared: workshop-only, single tenancy (ENH-152)
+
+- **Why:** a training with `.devcontainer/workshop-post-create.sh` must declare `delivery: {availability: workshop-only, tenancy: single}` in `docs/index.md`, or the framework's sync check refuses it.
+- **Proof:** `sync check-delivery` at framework `d57abd3` passes (rc 0). With the block removed it fails (rc 1). See R-08.

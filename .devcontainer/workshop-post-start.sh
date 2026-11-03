@@ -13,11 +13,26 @@ if [[ -f "${ENV_FILE:-}" ]]; then set -a; source "$ENV_FILE"; set +a; fi
 unset DT_EVAL_SECRETS
 dynatraceEvalReadSaveCredentials
 
+dt_rc=0
 for spec in "${BYOA_CLUSTERS[@]}"; do
   byoaUseCluster "${spec%%:*}"
-  byoaDeployDynatrace "${spec%%:*}"
+  # framework >= 1.20.3: non-zero when a token reader did not finish restarting (BUG-181)
+  byoaDeployDynatrace "${spec%%:*}" || dt_rc=$?
 done
+
+# astroshop's collector reads its own copy of the ingest token (not the DynaKube Secret, which
+# deployDynatrace already handles): rewrite it and restart the collector when it changed.
+byoaRefreshAstroshopSecret || { printError "astroshop dt-credentials refresh failed: its collector may hold the OLD ingest token"; dt_rc=1; }
 
 startProblemGenerator
 startTodoTraffic
+startLoadShaper
 checkSharedBoxReady
+ready_rc=$?
+# The worker records a token refresh as applied only on exit 0, so a refresh that left a
+# reader on the old token must fail this script even when the box is otherwise ready.
+if [[ "$dt_rc" -ne 0 ]]; then
+  printError "Token refresh incomplete (rc=$dt_rc)"
+  [[ "$ready_rc" -eq 0 ]] && ready_rc="$dt_rc"
+fi
+exit "$ready_rc"
