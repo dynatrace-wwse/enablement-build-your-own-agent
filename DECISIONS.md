@@ -239,3 +239,13 @@ Where things live:
 
 - **Why:** a training with `.devcontainer/workshop-post-create.sh` must declare `delivery: {availability: workshop-only, tenancy: single}` in `docs/index.md`, or the framework's sync check refuses it.
 - **Proof:** `sync check-delivery` at framework `d57abd3` passes (rc 0). With the block removed it fails (rc 1). See R-08.
+
+## D-16 · Framework 1.20.3, image v1.4.0 (owner, 2026-11-04)
+
+- **Owner:** "bump on PR branch, merge, book against main".
+- **What:** `FRAMEWORK_VERSION` 1.18.0 → 1.20.3 in `.devcontainer/util/source_framework.sh`, and the image `shinojosa/dt-enablement` v1.3.2 → v1.4.0 in both places in `devcontainer.json`. v1.4.0 is the image framework 1.19 pinned; the repos already on 1.20.x use it.
+- **Why 1.20.3:** BUG-181. A token refresh moves every DynaKube token reader onto the new tokens and waits for the restarts. A shared box depends on it, because `workshop-post-start.sh` re-runs `deployDynatrace` on a refresh. astroshop's own collector Secret stays this repo's job (`byoaRefreshAstroshopSecret`, BUG-185).
+- **How:** a hand edit of the two pins. `sync push-update` only targets repos listed in `repos.yaml`, which this private repo is not; the test repo was bumped the same way. `devcontainer.json` is repo-owned, so a sync would not have moved the image anyway.
+- **Repo-owned files from 1.18 to 1.20.3:** sync's migration changed none of the files this repo owns. The framework side adds the BUG-181 refresh, astroshop-lite, recognition of the shared-workshop scripts (ENH-146 F1), and helm 3.22.1.
+- **Proof:** R-09.
+
