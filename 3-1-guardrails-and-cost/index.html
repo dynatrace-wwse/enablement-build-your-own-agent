@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../1-environment-check/">
+        <link rel="prev" href="../2-3-agentic-workflow/">
       
       
-        <link rel="next" href="../resources/">
+        <link rel="next" href="../3-2-validate-and-roll-out/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>2. Scale the App - Dynatrace Enablement Lab: Build Your Own Observability Agent</title>
+        <title>3.1 Guardrails and cost - Dynatrace Enablement Lab: Build Your Own Observability Agent</title>
       
     
     
@@ -77,7 +77,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#2-scale-the-app" class="md-skip">
+        <a href="#31-guardrails-and-cost" class="md-skip">
           Skip to content
         </a>
       
@@ -112,7 +112,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              2. Scale the App
+              3.1 Guardrails and cost
             
           </span>
         </div>
@@ -281,11 +281,11 @@
   
   
     <li class="md-nav__item">
-      <a href="../prerequisites/" class="md-nav__link">
+      <a href="../1-1-assist-and-skills/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    Prerequisites
+    1.1 Assist and skills
   </span>
   
 
@@ -301,11 +301,91 @@
   
   
     <li class="md-nav__item">
-      <a href="../1-environment-check/" class="md-nav__link">
+      <a href="../1-2-notebooks-dashboards-pages/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    1. Check the Environment
+    1.2 Notebooks, dashboards, Pages
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../1-3-dtctl-mcp-preview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    1.3 Preview: dtctl and MCP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../2-1-custom-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    2.1 Build your agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../2-2-trigger-via-assist/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    2.2 Call it from Assist
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../2-3-agentic-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    2.3 Agentic workflow
   </span>
   
 
@@ -334,7 +414,7 @@
           
   
   <span class="md-ellipsis">
-    2. Scale the App
+    3.1 Guardrails and cost
   </span>
   
 
@@ -345,7 +425,7 @@
         
   
   <span class="md-ellipsis">
-    2. Scale the App
+    3.1 Guardrails and cost
   </span>
   
 
@@ -367,6 +447,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#measure-your-own-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      Measure your own agent
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#validation" class="md-nav__link">
     <span class="md-ellipsis">
       Validation
@@ -379,6 +468,26 @@
   
 </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../3-2-validate-and-roll-out/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    3.2 Validate and roll out
+  </span>
+  
+
+      </a>
     </li>
   
 
@@ -430,6 +539,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#measure-your-own-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      Measure your own agent
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#validation" class="md-nav__link">
     <span class="md-ellipsis">
       Validation
@@ -456,72 +574,59 @@
   
 
 
-<h1 id="2-scale-the-app">2. Scale the App<a class="headerlink" href="#2-scale-the-app" title="Permanent link">#</a></h1>
-<!-- TODO(starter): this page is the example step. Replace it with your first real task and copy
-     it once per further step (3-<slug>.md, 4-<slug>.md, …), adding each to the nav in mkdocs.yaml.
-     Every step has the same rhythm: TELL why, DO one action, CHECK it, SOLVE it. -->
-
-<p>One replica of an application is one failure away from an outage. Kubernetes keeps as many
-copies of a pod running as the deployment asks for, so scaling out is a single command.</p>
-<p>Scale the TODO app to two replicas:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>scale<span class="w"> </span>deployment<span class="w"> </span>todoapp<span class="w"> </span>-n<span class="w"> </span>todoapp<span class="w"> </span>--replicas<span class="o">=</span><span class="m">2</span>
-</span></code></pre></div>
-<p>Then watch the second pod start:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>todoapp
+<h1 id="31-guardrails-and-cost">3.1 Guardrails and cost<a class="headerlink" href="#31-guardrails-and-cost" title="Permanent link">#</a></h1>
+<p>An agent that runs on a schedule costs money every time it runs, and a loop makes no noise when it goes wrong. Before you trust an agent unattended, put limits on it:</p>
+<ul>
+<li><strong>What it can do.</strong> Give it read-only tools and least-privilege permissions for whoever runs it. The workflow's actor is that runner.</li>
+<li><strong>How often it runs.</strong> Use a schedule, not a trigger that fires on every event. A frequently scheduled agent can exhaust the tenant's AI request limit for <em>everyone</em>, including Assist.</li>
+<li><strong>How much it reads.</strong> Keep the timeframe in the prompt short ("opened in the last 30 minutes"), and ask for small, structured output.</li>
+<li><strong>Who reads the result.</strong> Send the result somewhere a person looks, and record that it ran.</li>
+</ul>
+<h2 id="measure-your-own-agent">Measure your own agent<a class="headerlink" href="#measure-your-own-agent" title="Permanent link">#</a></h2>
+<p>Run this in a notebook. It counts how often your workflow ran in the last hour and checks the result against a budget of 4 runs:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>fetch dt.system.events, from:now()-1h
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>| filter event.kind == "WORKFLOW_EVENT" and event.type == "WORKFLOW_EXECUTION"
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>| filter contains(dt.automation_engine.workflow.title, "{{DT_SEED_SCOPE}}", caseSensitive:false)
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>| summarize runs = count()
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>| fieldsAdd within_budget = if(runs &lt;= 4, "yes", else: "no")
 </span></code></pre></div>
 <h2 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">#</a></h2>
-<!-- A shell check calls a function by name: the platform loads the framework and
-     .devcontainer/util/my_functions.sh first. checkTodoAppScaled is defined there.
-     Run it once BEFORE the step's action and confirm it fails — a check that cannot fail
-     proves nothing. -->
+<p>The check runs the same budget query for you. It passes when your agent ran at least once in the last hour, and no more than 4 times:</p>
 <!-- LAB_QUESTION
-type: shell-verification
-question: "Verify the TODO app runs two replicas"
-buttonText: "Check replicas"
-command: "checkTodoAppScaled"
+type: dql-verification
+question: "Verify your agent stays within its run budget (at most 4 runs per hour)"
+buttonText: "Check budget"
+dql: |
+  fetch dt.system.events, from:now()-1h
+  | filter event.kind == "WORKFLOW_EVENT" and event.type == "WORKFLOW_EXECUTION"
+  | filter contains(dt.automation_engine.workflow.title, "{{DT_SEED_SCOPE}}", caseSensitive:false)
+  | summarize runs = count()
+  | fieldsAdd within_budget = if(runs >= 1 and runs <= 4, "yes", else: "no")
 expect:
-  operator: exit-zero
-hint: "Run the kubectl scale command above, wait until both pods show Running, then check again."
-explanation: "Two todoapp pods are Running: one can fail and the app stays up."
+  operator: eq
+  field: within_budget
+  value: "yes"
+hint: "Either your workflow has not run in the last hour, or it ran more than 4 times. A schedule of 30 minutes plus one manual run stays within budget."
+explanation: "Your agent ran at least once and stayed within budget."
 -->
 
-<!-- A multiple-choice question checks understanding. `correct` is the 0-based index of the right
-     option: double-check it, a wrong index strands the learner. -->
 <!-- LAB_QUESTION
 type: multiple-choice
-question: "What does `kubectl scale deployment todoapp --replicas=2` change?"
+question: "Your triage agent runs every minute on a busy tenant. What is the first thing to break?"
 options:
-  - "The number of todoapp pods the deployment keeps running"
-  - "The CPU and memory each todoapp pod may use"
-  - "The number of nodes in the cluster"
+  - "The tenant's AI request limit, which throttles Assist for everyone"
+  - "Nothing, because agent runs are free"
+  - "The Kubernetes cluster"
+  - "Only your own workflow"
 correct: 0
-explanation: "A deployment's replica count is how many identical pods Kubernetes keeps running. Resources and nodes are set elsewhere."
+explanation: "Agentic actions share the tenant's AI request budget. A frequent schedule throttles everyone else."
 -->
 
-<!-- TODO(starter): a step that changes what Dynatrace sees gets a dql-verification check too.
-     Scope it to the learner with endsWith(k8s.cluster.name, "{{DT_SESSION_ID}}") and bound it in
-     time with from:now()-15m. Copy the example from the handbook's Interactive Blocks page:
-     https://dynatrace-wwse.github.io/enablement-app-training-template/04-interactive-blocks/ -->
-
-<!-- The solution: `commands` run by Run solution, the nightly training test and resume;
-     `verify` must exit 0 afterwards and is the same check the learner clicks. -->
 <!-- LAB_SOLUTION
 reveal: |
-  Scale the deployment to two replicas: `kubectl scale deployment todoapp -n todoapp --replicas=2`.
-commands:
-  - kubectl scale deployment todoapp -n todoapp --replicas=2
-verify:
-  - LAB_WAIT=1 checkTodoAppScaled
+  Set the workflow's schedule to 30 minutes (or slower). One manual run plus the schedule
+  stays within 4 runs an hour.
 -->
-
-<!-- The scored assessment goes on the LAST hands-on step, once. Its id must equal the file name
-     .assessment/<id>.json and the `id` inside it. -->
-<!-- LAB_QUESTIONAIRE: starter-quiz retake=true -->
-
-<!-- Review checklist for this step (contract C7; the format is explained in docs/index.md).
-     When you copy this page for a new step, delete these lines: an id may appear once per repo. -->
-<!-- checklist [ ] gen-assessment: `.assessment/<id>.json` parses and its id matches the `LAB_QUESTIONAIRE` line -->
-<!-- checklist [ ] author-assessment: The assessment is on the last step, its questions reviewed -->
 
 
 
@@ -559,7 +664,7 @@ verify:
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../1-environment-check/" class="md-footer__link md-footer__link--prev" aria-label="Previous: 1. Check the Environment">
+          <a href="../2-3-agentic-workflow/" class="md-footer__link md-footer__link--prev" aria-label="Previous: 2.3 Agentic workflow">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -569,20 +674,20 @@ verify:
                 Previous
               </span>
               <div class="md-ellipsis">
-                1. Check the Environment
+                2.3 Agentic workflow
               </div>
             </div>
           </a>
         
         
           
-          <a href="../resources/" class="md-footer__link md-footer__link--next" aria-label="Next: Resources">
+          <a href="../3-2-validate-and-roll-out/" class="md-footer__link md-footer__link--next" aria-label="Next: 3.2 Validate and roll out">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Resources
+                3.2 Validate and roll out
               </div>
             </div>
             <div class="md-footer__button md-icon">

@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="..">
+        <link rel="prev" href="../2-1-custom-agent/">
       
       
-        <link rel="next" href="../1-environment-check/">
+        <link rel="next" href="../2-3-agentic-workflow/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>Prerequisites - Dynatrace Enablement Lab: Build Your Own Observability Agent</title>
+        <title>2.2 Call it from Assist - Dynatrace Enablement Lab: Build Your Own Observability Agent</title>
       
     
     
@@ -77,7 +77,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#prerequisites" class="md-skip">
+        <a href="#22-call-your-agent-from-assist" class="md-skip">
           Skip to content
         </a>
       
@@ -112,7 +112,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Prerequisites
+              2.2 Call it from Assist
             
           </span>
         </div>
@@ -278,6 +278,86 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../1-1-assist-and-skills/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    1.1 Assist and skills
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../1-2-notebooks-dashboards-pages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    1.2 Notebooks, dashboards, Pages
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../1-3-dtctl-mcp-preview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    1.3 Preview: dtctl and MCP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../2-1-custom-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    2.1 Build your agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -290,15 +370,54 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    2.2 Call it from Assist
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
-    Prerequisites
+    2.2 Call it from Assist
   </span>
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Validation
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -311,11 +430,11 @@
   
   
     <li class="md-nav__item">
-      <a href="../1-environment-check/" class="md-nav__link">
+      <a href="../2-3-agentic-workflow/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    1. Check the Environment
+    2.3 Agentic workflow
   </span>
   
 
@@ -331,11 +450,31 @@
   
   
     <li class="md-nav__item">
-      <a href="../2-scale-the-app/" class="md-nav__link">
+      <a href="../3-1-guardrails-and-cost/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    2. Scale the App
+    3.1 Guardrails and cost
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../3-2-validate-and-roll-out/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    3.2 Validate and roll out
   </span>
   
 
@@ -384,6 +523,23 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Validation
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -400,23 +556,39 @@
   
 
 
-<h1 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">#</a></h1>
-<!-- TODO(starter): list what the learner needs before step 1, or delete this page and its nav entry. -->
-
-<p>You need:</p>
-<ul>
-<li>A Dynatrace tenant with the Enablement app installed.</li>
-<li>Nothing on your laptop: the terminal, the cluster and the demo app run in your environment.</li>
-</ul>
-<!-- Optional example of a step setup block: it runs silently each time the page opens, must be
-     idempotent, and prepares a step without doing the learner's work. This one waits until the
-     demo app is up, so step 1 does not start on a half-built environment. -->
-<!-- STEP_SETUP
-commands:
-  - waitForTodoAppRunning
+<h1 id="22-call-your-agent-from-assist">2.2 Call your agent from Assist<a class="headerlink" href="#22-call-your-agent-from-assist" title="Permanent link">#</a></h1>
+<p>An agent becomes useful when people reach it where they already work. In <strong>Assist</strong>, address your agent by name:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>{{DT_SEED_SCOPE}}: @{{DT_SEED_SCOPE}}-triage-agent triage the open problems on the ops cluster
+</span></code></pre></div>
+<p>Compare the answer with the generic one from step 1.1. It should be a table, it should quote evidence, and it should name an owner from your runbook.</p>
+<p>Now change one line of the agent's instructions, for example ask for a severity column, and call it again. A change to the instructions takes effect on the next call. You do not need to deploy anything.</p>
+<h2 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">#</a></h2>
+<!-- LAB_QUESTION
+type: multiple-choice
+question: "The agent's answer names 'team Ledger' as the owner. Where did that come from?"
+options:
+  - "From the runbook skill attached to the agent"
+  - "From the Kubernetes labels of the workload"
+  - "Assist guessed it"
+  - "From the problem's root-cause analysis"
+correct: 0
+explanation: "Ownership exists only in your runbook. Because the answer names it, you know the skill was used."
 -->
 
-<!-- LAB_NO_SOLUTION: reading page — nothing in the environment changes -->
+<!-- PENDING_CHECK (contract C-DOC, CoPilotConversation — UNPROVEN, see README)
+type: document-verification
+question: "Verify you called your agent from Assist"
+docType: CoPilotConversation
+nameStartsWith: "{{DT_SEED_SCOPE}}: @{{DT_SEED_SCOPE}}-triage-agent"
+owner: self
+-->
+
+<!-- LAB_SOLUTION
+reveal: |
+  In Assist, type `@` and pick `{{DT_SEED_SCOPE}}-triage-agent`, then ask it to triage the open
+  problems. If the agent is not offered, check that it is saved in Agent Studio under exactly
+  that name.
+-->
 
 
 
@@ -454,7 +626,7 @@ commands:
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href=".." class="md-footer__link md-footer__link--prev" aria-label="Previous: Welcome">
+          <a href="../2-1-custom-agent/" class="md-footer__link md-footer__link--prev" aria-label="Previous: 2.1 Build your agent">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -464,20 +636,20 @@ commands:
                 Previous
               </span>
               <div class="md-ellipsis">
-                Welcome
+                2.1 Build your agent
               </div>
             </div>
           </a>
         
         
           
-          <a href="../1-environment-check/" class="md-footer__link md-footer__link--next" aria-label="Next: 1. Check the Environment">
+          <a href="../2-3-agentic-workflow/" class="md-footer__link md-footer__link--next" aria-label="Next: 2.3 Agentic workflow">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                1. Check the Environment
+                2.3 Agentic workflow
               </div>
             </div>
             <div class="md-footer__button md-icon">
