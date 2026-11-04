@@ -1,72 +1,144 @@
-# Enablement Training Starter
+# Build Your Own Observability Agent with Dynatrace
 
-The repository you copy to start a new training for the Dynatrace Enablement app. It is a small,
-complete training (welcome, prerequisites, an environment check, one hands-on step, resources and
-an assessment) with a `TODO(starter)` marker at every place you must change, plus a review
-checklist inside its own pages: what to do while building, and what a human must verify before
-the training ships (see [Checklist items](#checklist-items)).
+A Perform hands-on session (175 min): Assist and skills, custom agents built in Agent Studio, agentic workflows, and how to run them safely.
 
-How everything works is explained in the handbook,
-[enablement-app-training-template](https://dynatrace-wwse.github.io/enablement-app-training-template/).
-The starter is the thing you copy; the handbook is the thing you read.
+**Private repository.** It is delivered as a **shared-infrastructure workshop**: one machine and one tenant serve the trainer and every learner. That workshop type is being designed in the platform epic ENH-146. Until it lands, this repo also runs as a classic per-learner training (seat mode, see below).
 
-## Start a training
+| Part | Time | Pages |
+|---|---|---|
+| Intro | 10 min | `docs/index.md` |
+| 1. Explore with Assist | 60 min | `1-1` Assist and skills · `1-2` notebooks, dashboards, Pages · `1-3` dtctl and MCP preview |
+| Break | 5 min | |
+| 2. Build your own agent | 70 min | `2-1` Agent Studio · `2-2` call it from Assist · `2-3` Run agent in a scheduled workflow |
+| 3. Scale safely | 30 min | `3-1` guardrails and cost · `3-2` validate and roll out, plus the assessment |
 
-1. **Use this template → Create a new repository** in `dynatrace-wwse`, named `enablement-<topic>`.
-2. Open it in the app's **Editor**, start the environment, and work through the **Checklist** tab.
-3. Replace every `TODO(starter)` marker. The editor lists the ones left in Problems.
+## Architecture
 
-## What is in it
-
-| File | Holds |
-|---|---|
-| `mkdocs.yaml` | `training_name` and the nav: one entry per step, in order |
-| `docs/index.md` | welcome page: front matter (description, tags, difficulty, duration), outcome, audience; no checks |
-| `docs/prerequisites.md` | optional: what the learner needs, with a `STEP_SETUP` example; delete it if unused |
-| `docs/1-environment-check.md` | checks only what `post-create.sh` built; `LAB_NO_SOLUTION` |
-| `docs/2-scale-the-app.md` | the example step: tell → do → check (`LAB_QUESTION`) → solve (`LAB_SOLUTION`), a quiz, the assessment line |
-| `docs/resources.md` | the sources the steps are grounded on; `LAB_NO_SOLUTION` |
-| `.assessment/starter-quiz.json` | the scored assessment, bound by `LAB_QUESTIONAIRE: starter-quiz` |
-| `.devcontainer/post-create.sh` | builds the environment (k3d cluster + the TODO app) |
-| `.devcontainer/util/my_functions.sh` | your check and solution functions (one example: `checkTodoAppScaled`) |
-| `.devcontainer/yaml/dt-tokens.example.yaml` | read by nothing; rename to `dt-tokens.yaml` only if the training needs non-default token scopes |
-
-The starter passes `tg lint` untouched apart from its markers, and the example step's check fails
-until the step is done, so a fresh copy imports and runs before you change anything.
-
-## `TODO(starter)` markers
-
-A marker is the literal text `TODO(starter):` followed by what to do, in an HTML comment
-(`<!-- TODO(starter): … -->`) in Markdown and a `#` comment in YAML and shell. Remove the marker
-when the instruction is done. Markers count in `mkdocs.yaml`, `docs/`, `.assessment/` and
-`.devcontainer/`; `README.md` only *mentions* the marker and is not scanned. Checklist items
-say "starter TODO marker" for the same reason: they live in `docs/`, where the marker counts.
-
-## Checklist items
-
-There is no `CHECKLIST.md` any more. Each review item is an HTML comment **in the page it is
-about** — the learner never sees it, and the editor's Checklist tab lists and ticks it. The
-format is contract C7 of the training generator (`docs/architecture/contracts.md`):
-
-```text
-<!-- checklist [ ] human-checks-fail-first: Every check fails before its step's action and passes after it -->
-<!-- checklist [x] gen-mkdocs-strict: mkdocs build in strict mode passes -->
-<!-- checklist [-] human-customer-logo: Customer logo use approved in writing — n/a: no custom logo -->
+```
+            trainer (shell)                      learners (browser only, no terminal)
+                 │                                        │
+                 ▼                                        ▼
+┌──────────── shared box (Sysbox) ───────────┐   ┌──────── ONE Dynatrace tenant ────────┐
+│ workshop-post-create.sh  (once)            │   │ Assist · Knowledge Base · Agent Studio│
+│ workshop-post-start.sh   (every start)     │   │ Notebooks · Dashboards · Pages        │
+│                                            │   │ Workflows (Run agent action)          │
+│ k3d byoa-shop  astroshop, hipstershop      │   │                                       │
+│                + DynaKube ─────────────────┼──▶│                                       │
+│ k3d byoa-ops   easytrade, todoapp,         │   │ every learner object carries the      │
+│                chaos ns + DynaKube ────────┼──▶│ learner key {{DT_SEED_SCOPE}}         │
+│ k3d byoa-sec   unguard (+ attacks)         │   │                                       │
+│                + DynaKube ─────────────────┼──▶│                                       │
+│ load shaper (hourly, 24 h curve, ≤36 h)    │   │                                       │
+│ problem generator (detached loop, ≤36 h):  │   └───────────────────────────────────────┘
+│   14 faults: CPU, memory, errors, latency,
+│   traffic, availability; 20 min each, then heal
+└────────────────────────────────────────────┘
 ```
 
-- One item per comment, the whole item on one line. State `[ ]` open, `[x]` done, `[-]` does
-  not apply — and then the text ends with ` — n/a: <reason>`.
-- The id matches `^(gen|author|human|submit)-[a-z0-9-]+$` and is unique across the repo; match
-  by id, never by text. The text never contains `--` (it would end the HTML comment early in
-  strict parsers): write "strict mode", not the flag.
-- Keyword is lowercase `checklist`, never `check` (that is a `LAB_QUESTION` check).
-- Placement: an item about one step lives on that step's page (`author-env-check` on step 1,
-  the assessment items on the last step); repo-wide items live in `docs/index.md`. When you
-  copy a step page, delete its checklist lines — a duplicate id is an error.
-- Who sets them: `gen-` the training generator only, for what it verified itself; `author-` the
-  trainer; `human-` a person, always; `submit-` the trainer, last pass before the PR leaves draft.
-- **Ready for review** = no `human-` or `submit-` item is `[ ]`. The editor's Create PR waits on it.
+- **The box seeds the trainer's tenant.** It starts about **24 h before** the class and runs for **36 h at most**, unless the trainer schedules longer. By the time the class starts, Grail already holds a day of data and Davis has opened and closed problems of every kind. Every script is idempotent and safe to restart. `workshop-post-start.sh` re-reads the tokens on every start (`DECISIONS.md` D-13).
+- **Two clusters, one DynaKube each.** The framework names a DynaKube `<repo>-<getDtSessionId>`, and two clusters would collide on that name. `byoaDeployDynatrace` therefore makes the id per cluster for the duration of the call (`shop-<id>`, `ops-<id>`). This is a workaround until the framework takes a cluster name (ENH-146 phase 7).
+- **Ports** are 30080/30443/6450 (shop), 31080/31443/6451 (ops) and 32080/32443/6452 (sec), so the box never competes with a host nginx for 80/443.
+- **Apps and traffic over time** (`DECISIONS.md` D-14):
+  - Five apps run in three clusters.
+  - A load shaper follows a 24-hour curve, so the tenant shows a working day rather than flat lines.
+  - Every hour, `~/.byoa-footprint.log` records CPU and memory per namespace and the host's free memory. Size the box from that log.
+- **Problem generator: a Playground-like mix** (`DECISIONS.md` D-12).
+  - `BYOA_FAULTS` rotates through 14 faults:
+    - six of astroshop's built-in flagd fault flags (`adHighCpu`, `adManualGc`, `paymentFailure`, `kafkaQueueProblems`, `imageSlowLoad`, `loadgeneratorFloodHomepage`)
+    - CPU throttling, OOM, CrashLoopBackOff and an error-log burst in the `chaos` namespace
+    - easytrade's database going down
+    - hipstershop's currency service CPU-capped, its Redis cart store down, and unguard's database down
+  - `startProblemGenerator` and `stopProblemGenerator` in `.devcontainer/util/my_functions.sh` manage it. The generator keeps a pid file and a log at `~/.byoa-chaos.log`.
+  - Each fault runs for `BYOA_CHAOS_PERIOD` (default 1200 s), and every fault has a heal step.
+  - After `BYOA_CHAOS_MAX_HOURS` (default 36) the generator heals and exits.
+  - Trainer check: `checkSharedBoxReady`.
 
-`tg lint` (and the editor's Problems panel) reports a malformed item, a missing n/a reason, a bad
-or duplicate id or a `--` as an error, and an item inside a code fence or on a page outside the
-nav as a warning.
+### Seat mode (works today)
+
+`post-create.sh` builds one k3d cluster with the todoapp and Dynatrace. That keeps the repo importable and testable on today's per-learner platform. The UI exercises are the same, and so are the checks.
+
+## Hand-over records
+
+- **`DECISIONS.md`:** every question that shaped this training, with the options, the choice, the reasons and the date.
+- **`VALIDATION.md`:** every exercise with its check and its proof, plus the log of every verification run.
+
+Update both with every change.
+
+## Naming convention: the learner key
+
+| Object | Name |
+|---|---|
+| Notebook | `<key> · BYOA notebook` |
+| Dashboard | `<key> · BYOA dashboard` |
+| Page | `<key> · BYOA page` |
+| Knowledge Base skill | `<key>-runbook` (stored as `/skills/<key>-runbook/SKILL.md`) |
+| Custom agent | `<key>-triage-agent` |
+| Workflow | `<key> · BYOA triage` |
+| Assist prompts | start with `<key>:` |
+| DQL marker | column alias `` `byoa_<key>` `` |
+
+`<key>` is `{{DT_SEED_SCOPE}}`: the learner's e-mail local part, normalised and cut to at most 17 characters, with **no date**. `{{DT_SESSION_ID}}` is deliberately **not** used: its UTC date suffix changes at midnight, in the middle of a workshop. `byoaKey` in `my_functions.sh` reproduces the normalisation so tests can compute the same string.
+
+**Why a column alias and not a comment.** Proven on a tenant on 2026-10-29: Grail's `QUERY_EXECUTION_EVENT.query_string` masks DQL comments **and** string literals to `*`. Identifiers survive verbatim, backticked ones included: `` `byoa_probe-q8` `` was found about 15 s after the query ran.
+
+## Per-learner validation
+
+| Step | Exercise | Object | How it is validated | Today | Proven |
+|---|---|---|---|---|---|
+| 1.1 | Teach Assist the runbook | KB skill `<key>-runbook` | `document-verification` `ai-agent-resource`, name starts `/skills/<key>-runbook/` | quiz only | type: Y for app-shipped skills, N for user-created |
+| 1.1 | Prompt Assist | `CoPilotConversation` doc | `document-verification`, name starts `<key>:` | — | N: can a learner list own private conversations? |
+| 1.2 | Dashboard | dashboard doc + its query | **today:** `dql-verification` on `QUERY_EXECUTION_EVENT`, `client.application_context == "dynatrace.dashboards"` and `query_string` contains `byoa_<key>` | ✅ | Y: query parses; marker pass and fail shown with a dtctl run; context value seen in tenant data |
+| 1.2 | Notebook | notebook doc + its query | **today:** same, any app context except dashboards and the Enablement app | ✅ | partly: notebooks' context value not yet seen |
+| 1.2 | Page | Pages doc | `document-verification` | — | N: Pages document type unknown |
+| 2.1 | Agent in Agent Studio | agent `<key>-triage-agent` | `agent-verification` (name, owner, instructions, skills) | quiz; validated through use in 2.3 | N: no supported listing API found |
+| 2.2 | Call agent from Assist | conversation | `document-verification` `CoPilotConversation` | quiz only | N |
+| 2.3 | Run agent from a workflow | workflow `<key> · BYOA triage` | **today:** `dql-verification` on `WORKFLOW_EVENT` / `ACTION_EXECUTION`: title contains key, `action.function == "run-agent"`, `state == "SUCCESS"` | ✅ | parses and fails closed: Y; pass case: N (no run-agent run on the test tenant yet) |
+| 2.3 | …on a schedule | same | **today:** `WORKFLOW_EXECUTION` with `trigger.type == "Schedule"` | ✅ | Y: the `Schedule` value was seen in tenant data |
+| 3.1 | Guardrail: run budget | same | **today:** at least 1 and at most 4 executions in the last hour (`eq within_budget "yes"`) | ✅ | Y: parses; logic shown on a real workflow |
+| 3.2 | Validate and roll out | — | quiz and the scored assessment | ✅ | — |
+
+Checks that need platform work are written in the pages as `<!-- PENDING_CHECK … -->` comments. The importer ignores those, so they cannot be dropped silently or fail lint. Each one becomes a `LAB_QUESTION` when its contract lands.
+
+**Anti-copy.** Today the checks match the key in the name. Anyone who types another learner's key can make that learner's check pass, or pass their own check with someone else's object. The planned fix compares the owner with the signed-in learner: `{{DT_USER_EMAIL}}` and `{{DT_USER_ID}}` (209, Q16). Workflows would join `WORKFLOW_CREATED.user.id`.
+
+## Open platform contracts (with ENH-146 / agent 209)
+
+| Id | Contract | Status |
+|---|---|---|
+| C-FILES | `.devcontainer/workshop-post-create.sh` runs once on the shared box, `workshop-post-start.sh` on every start; framework sync treats both as repo-owned | proposed by 209, written here |
+| C-ENV | shared box env: `ORBITAL_SHARED_ROLE=shared`, `ORBITAL_WORKSHOP_ID=ws_…`, `ORBITAL_JOB_KIND=workshop`, `DT_HOSTGROUP=ws-<6hex>-<stamp>` (contract v0.2), operator and ingest tokens only (no monaco or dtctl token) | proposed |
+| C-ACCESS | learners have no seat and no terminal (`studentShell=0`, `personalSeats=0`); only the trainer can shell into the box | proposed |
+| C-KEY | `{{DT_SEED_SCOPE}}` resolves for a learner who has no seat; a neutral alias `{{DT_USER_KEY}}` is proposed | resolves today (209); alias open |
+| C-WSID | `{{DT_WORKSHOP_SESSION_ID}}`, the shared box's `DT_HOSTGROUP`, to scope data queries to this workshop's clusters | open; this repo does not use it yet |
+| C-DOC | new `document-verification` question: `{docType, nameEquals or nameStartsWith, owner: self, contentContains[], since}`, run in the browser as the learner. Types needed: `notebook`, `dashboard`, `ai-agent-resource`, `CoPilotConversation`, Pages | open |
+| C-AGENT | a way to verify a custom agent by name and owner: a supported listing API and its scope | open; owner question |
+| C-IDENT | `{{DT_USER_EMAIL}}` and `{{DT_USER_ID}}` for anti-copy | open (Q16) |
+| C-SOLVE | Steps done in the UI have no machine-runnable solution: a learner has no container, and a trainer's **Run solution** would need its own tenant identity to create objects for that learner. The editor counts a solution only when it has `commands`/`verify`, so it shows a `step-solution` warning on every UI step. Decide: reveal-only solutions count for shared workshops, or solutions get a way to run as the trainer against the tenant | open |
+| C-IAM | learners can create notebooks, dashboards, workflows, agents and skills, and can read `dt.system.events` (`storage:system:read`) for their own checks | open; the owner question covers tenant IAM |
+
+## What cannot be tested until the platform lands
+
+- Building the shared box on Orbital (`workshop-post-create.sh` under `ORBITAL_SHARED_ROLE=shared`), and its restart path.
+- Every `PENDING_CHECK`: documents, skills, conversations, Pages, agents.
+- A real learner session with no seat, where `{{DT_SEED_SCOPE}}` resolves with no container behind it.
+- Two DynaKubes in one tenant from one box, end to end (the scripts are written; they have not run against a tenant).
+- The pass case of the Run agent check.
+
+## Lint status
+
+`tg lint` (the editor's own rules): **0 errors, 12 warnings**, all known and accepted for now:
+
+- 6 × `step-solution`: UI steps carry a `LAB_SOLUTION` with only `reveal` text; see C-SOLVE.
+- 5 × `dql-unscoped`: the checks are scoped by the learner key in the object name, not by `{{DT_SESSION_ID}}`. That is the point of the shared-workshop design (C-KEY); the rule assumes one cluster per learner.
+- 1 × `step-structure-first-step`: the first step does not check what `post-create` built. In a shared workshop that is the trainer's job (`checkSharedBoxReady`), and checking it per learner needs C-WSID.
+
+## Tests
+
+```bash
+FRAMEWORK_DIR=<codespaces-framework checkout> bats .devcontainer/test/shared-box.bats   # helpers, no cluster (19 tests)
+bash -n .devcontainer/*.sh .devcontainer/util/my_functions.sh
+```
+
+Each test was shown to fail on a broken helper (mutation run, 2026-10-29). `.devcontainer/test/integration.sh` is the seat-mode CI test.
+
+Solutions use read-only queries only. A trainer's **Run solution** for a UI step has nothing to run: the solution is the `reveal` text. In the editor, every `dql-verification` draws on the app's per-tenant DQL budget (`takeDqlBudget` in the app's `api/_mint-budget.ts`), so do not press Test step in a loop.

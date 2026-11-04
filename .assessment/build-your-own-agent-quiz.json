@@ -1,0 +1,32 @@
+{
+  "templateVersion": "1.0.0",
+  "id": "build-your-own-agent-quiz",
+  "category": "CO",
+  "title": "Build Your Own Observability Agent — Knowledge Check",
+  "description": "Skills, agents, agentic workflows and running them safely.",
+  "difficulty": "intermediate",
+  "estimatedTime": 5,
+  "questions": [
+    {"id": "q1", "type": "multiple-choice", "title": "Skill or agent", "content": "You want Assist to follow your team's crash-loop runbook. What do you add?",
+     "options": [
+       {"id": "a", "text": "A skill with the runbook and a precise description", "isCorrect": true, "explanation": "A skill adds knowledge that is loaded when its description matches."},
+       {"id": "b", "text": "A new dashboard", "isCorrect": false, "explanation": "A dashboard shows data; it does not change how Assist answers."},
+       {"id": "c", "text": "A workflow that runs every minute", "isCorrect": false, "explanation": "A workflow schedules work; it does not add knowledge."}
+     ], "correctAnswer": "a", "explanation": "Knowledge goes in skills; jobs go in agents.", "points": 1000, "hints": ["Which one adds knowledge?"]},
+    {"id": "q2", "type": "multiple-choice", "title": "Least privilege", "content": "What makes an agent read-only?",
+     "options": [
+       {"id": "a", "text": "Giving it no tool that writes, and running it with read-only permissions", "isCorrect": true, "explanation": "Tools and permissions are enforced; instructions are only asked."},
+       {"id": "b", "text": "Writing 'do not change anything' in its instructions", "isCorrect": false, "explanation": "Instructions alone can be ignored or worked around."},
+       {"id": "c", "text": "Naming it triage-agent", "isCorrect": false, "explanation": "A name enforces nothing."}
+     ], "correctAnswer": "a", "explanation": "Enforce limits with tools and permissions, not with prose.", "points": 1000, "hints": ["What does the platform enforce?"]},
+    {"id": "q3", "type": "multiple-choice", "title": "Cost", "content": "Which schedule is the safest default for an unattended triage agent?",
+     "options": [
+       {"id": "a", "text": "Every 30 minutes, on recent problems only", "isCorrect": true, "explanation": "Bounded runs, bounded input."},
+       {"id": "b", "text": "On every log line", "isCorrect": false, "explanation": "Unbounded, and it throttles AI for everyone."},
+       {"id": "c", "text": "Every minute over the last 7 days", "isCorrect": false, "explanation": "Frequent and large: the worst of both."}
+     ], "correctAnswer": "a", "explanation": "Limit how often it runs and how much it reads.", "points": 1000, "hints": ["Think of the tenant's AI request limit."]}
+  ],
+  "maxScore": 3000,
+  "tags": ["build-your-own-agent"],
+  "learningObjectives": ["Choose between a skill and an agent", "Make an agent read-only", "Bound an agent's cost"]
+}

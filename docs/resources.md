@@ -1,9 +1,15 @@
 # Resources
 
-<!-- TODO(starter): the documentation your steps are grounded on. Public links only in a public repo. -->
+Search these on [docs.dynatrace.com](https://docs.dynatrace.com):
 
-- [Kubernetes: scaling a deployment](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#scaling-a-deployment)
-- [Dynatrace documentation](https://docs.dynatrace.com)
-- [How to build a training (the handbook)](https://dynatrace-wwse.github.io/enablement-app-training-template/)
+- **Dynatrace Intelligence integrations: Run agents in Workflows.** The Run agent action, its inputs, and its usage limits.
+- **Agentic AI in Workflows.** The agentic AI actions.
+- **Audit logs on Grail.** `dt.system.events` and how to query it.
+- **Semantic dictionary: AutomationEngine workflow, task and action execution events.** The fields the workflow checks use.
+- **API for Dashboards and Notebooks.** The document service.
 
-<!-- LAB_NO_SOLUTION: reference page — nothing in the environment changes -->
+Tools:
+
+- [dtctl](https://github.com/dynatrace-oss/dtctl): the Dynatrace CLI.
+
+<!-- LAB_NO_SOLUTION: reference page — nothing in the tenant changes -->
