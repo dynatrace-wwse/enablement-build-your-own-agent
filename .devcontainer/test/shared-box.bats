@@ -125,8 +125,8 @@ setup() {
 }
 
 @test "load targets scale with the curve and never reach zero" {
-  [ "$(byoaLoadTargets 100)" = "20 20 3" ]
-  [ "$(byoaLoadTargets 50)" = "10 10 2" ]
+  [ "$(byoaLoadTargets 100)" = "6 10 1" ]
+  [ "$(byoaLoadTargets 50)" = "3 5 1" ]
   [ "$(byoaLoadTargets 1)" = "2 2 1" ]
 }
 
@@ -135,9 +135,9 @@ setup() {
   kubectl() { echo "$*" >> "$CALLS"; }; export -f kubectl
   byoaApplyLoad 100
   [ "$(grep -c . "$CALLS")" -eq 3 ]
-  grep -q "LOCUST_USERS=20" "$CALLS"
-  grep -q "USERS=20" "$CALLS"
-  grep -q "headlessloadgen --replicas=3" "$CALLS"
+  grep -q "LOCUST_USERS=6" "$CALLS"
+  grep -q " USERS=10" "$CALLS"
+  grep -q "headlessloadgen --replicas=1" "$CALLS"
   byoaApplyLoad 100            # same targets: no restart
   [ "$(grep -c . "$CALLS")" -eq 3 ]
   byoaApplyLoad 30
@@ -185,4 +185,78 @@ setup() {
   touch "$RV.bump"
   byoaRefreshAstroshopSecret
   grep -q "rollout restart deploy otel-collector" "$CALLS"
+}
+
+@test "the peaks stay inside the m6a.4xlarge budget (R-11): browser users and Chrome generators" {
+  (( BYOA_PEAK_ASTRO_USERS <= 6 ))
+  (( BYOA_PEAK_EASYTRADE_GENS <= 1 ))
+  (( BYOA_PEAK_HIPSTER_USERS <= 10 ))
+}
+
+@test "every load generator gets a memory request and limit, and nothing else is touched" {
+  export CALLS="$BATS_TEST_TMPDIR/calls"
+  kubectl() { echo "$*" >> "$CALLS"; }; export -f kubectl
+  byoaCapLoadGenerators
+  [ "$(grep -c . "$CALLS")" -eq 3 ]
+  grep -q "k3d-byoa-shop -n astroshop set resources deploy/load-generator --requests=memory=1Gi --limits=memory=3Gi" "$CALLS"
+  grep -q "k3d-byoa-shop -n hipstershop set resources deploy/loadgenerator --requests=memory=128Mi --limits=memory=512Mi" "$CALLS"
+  grep -q "k3d-byoa-ops -n easytrade set resources deploy/headlessloadgen --requests=memory=512Mi --limits=memory=1Gi" "$CALLS"
+}
+
+@test "a failed cap is reported, not swallowed" {
+  kubectl() { return 1; }; export -f kubectl
+  run byoaCapLoadGenerators
+  [ "$status" -ne 0 ]
+}
+
+slot() {  # slot <current_mib> <max_mib|max> <peak_mib> <oom_kill>
+  export BYOA_CGROUP_DIR="$BATS_TEST_TMPDIR/cg"; mkdir -p "$BYOA_CGROUP_DIR"
+  echo $(( $1 * 1048576 )) > "$BYOA_CGROUP_DIR/memory.current"
+  if [ "$2" = max ]; then echo max > "$BYOA_CGROUP_DIR/memory.max"; else echo $(( $2 * 1048576 )) > "$BYOA_CGROUP_DIR/memory.max"; fi
+  echo $(( $3 * 1048576 )) > "$BYOA_CGROUP_DIR/memory.peak"
+  printf 'low 0\nhigh 0\nmax 3\noom 2\noom_kill %s\n' "$4" > "$BYOA_CGROUP_DIR/memory.events"
+}
+
+@test "byoaSlotMem reads current, max, peak and oom_kill from the slot cgroup" {
+  slot 30000 59284 31000 7
+  [ "$(byoaSlotMem)" = "30000 59284 31000 7" ]
+}
+
+@test "byoaSlotMem says nothing when there is no cgroup to read" {
+  export BYOA_CGROUP_DIR="$BATS_TEST_TMPDIR/none"
+  run byoaSlotMem
+  [ "$status" -ne 0 ]
+  [ -z "$output" ]
+}
+
+@test "the memory guard halves the load below the headroom floor and only then" {
+  slot 30000 59284 31000 0
+  [ "$(byoaLoadPercent 100 2>/dev/null)" = "100" ]
+  slot 50000 59284 51000 0          # 9 GiB headroom < 14 GiB
+  [ "$(byoaLoadPercent 100 2>/dev/null)" = "50" ]
+  run byoaLoadPercent 100
+  [[ "$output" == *"memory guard"* ]]
+}
+
+@test "without a readable cgroup the guard leaves the curve alone" {
+  export BYOA_CGROUP_DIR="$BATS_TEST_TMPDIR/none"
+  [ "$(byoaLoadPercent 85)" = "85" ]
+}
+
+@test "the footprint log carries the slot's peak and oom_kill" {
+  slot 30000 59284 31000 4
+  kubectl() { :; }; export -f kubectl
+  export BYOA_FOOTPRINT_LOG="$BATS_TEST_TMPDIR/fp.log"
+  byoaFootprint
+  grep -q "slot mem_current=30000Mi mem_max=59284Mi mem_peak=31000Mi oom_kill=4" "$BYOA_FOOTPRINT_LOG"
+}
+
+
+@test "the hourly loop applies the load through the memory guard" {
+  slot 50000 59284 51000 0
+  export BYOA_FOOTPRINT_LOG="$BATS_TEST_TMPDIR/fp.log"
+  kubectl() { :; }; export -f kubectl
+  sleep() { exit 0; }               # one round, then out
+  run byoaLoadLoop
+  [[ "$output" == *"memory guard"* ]]
 }

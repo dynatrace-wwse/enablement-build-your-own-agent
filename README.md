@@ -135,7 +135,7 @@ Checks that need platform work are written in the pages as `<!-- PENDING_CHECK â
 ## Tests
 
 ```bash
-FRAMEWORK_DIR=<codespaces-framework checkout> bats .devcontainer/test/shared-box.bats   # helpers, no cluster (19 tests)
+FRAMEWORK_DIR=<codespaces-framework checkout> bats .devcontainer/test/shared-box.bats   # helpers, no cluster (28 tests)
 bash -n .devcontainer/*.sh .devcontainer/util/my_functions.sh
 ```
 

@@ -226,7 +226,15 @@ Where things live:
     - At the noon peak, with every limit reached, the box would use about 9 CPU and 36 GiB.
     - Fault spikes come on top: `cpuhog` 0.2 CPU, the flood flag, and `memoryhog` up to 96 MiB.
     - This leaves about 40 % of the box's memory free, and room for a shared LLM only if it is small.
-  - **The estimate must be confirmed with the footprint log** on the first staging run. Then decide whether a 4th app (opentelemetry-demo upstream or astroshop-lite) still fits.
+  - **The estimate was wrong (measured 2026-11-04, staging, 209):** the slot's memory limit is the host minus 4 GiB = 59,284 MiB, and it peaked at **58,563 MiB with 158 OOM kills**. All the kills were in the load generators: chrome 49, chrome_crashpad 19, node 8, locust 3, and Chrome's worker threads. None were in k3d, Kubernetes or the apps. The surge (+10 GiB in 2 min) came after the clusters were up, when the shaper set the noon peak.
+  - **Why the estimate missed it:** astroshop runs `LOCUST_BROWSER_TRAFFIC_ENABLED=true`, so every Locust user drives a headless Chromium, and easytrade's `headlessloadgen` is Chrome too. The shaper raised those to 20 browser users and 3 Chrome generators (the framework default is 2 users and 1 generator).
+  - **Fix (owner, 2026-11-04: "Do B, slim the load generator"):**
+    - Peaks lowered to astroshop 6 browser users, hipstershop 10 HTTP users and easytrade 1 generator. The 24 h curve and the 14 faults are unchanged; only the intensity is lower.
+    - Explicit memory requests and limits on the three generators (`BYOA_LOADGEN_LIMITS`).
+    - A memory guard: below 14 GiB of slot headroom the shaper runs at half its curve value.
+    - The footprint log records the slot's `memory.peak` and `oom_kill`.
+    - Target, as changed after measuring: 0 OOM kills, anon + kernel ≤ 45 GiB, and no memory pressure. `memory.peak` cannot be the measure, because it counts the k3d nodes' image cache (about 37 GiB, reclaimable) and sits near the ceiling on any box this size. Result (R-11): anon + kernel 20.2 GiB at 100 % load, 0 kills, pressure 0.
+  - A 4th app: anon + kernel leaves about 39 GiB of real headroom, so one more app fits by memory. The decision stays open, owner's call.
   - A bigger shape (r6a.4xlarge: 16 vCPU / 128 GiB) is an owner decision. It is not proposed yet.
 - **Left out, and why:**
   - **The travel site:** not containerised, needs a 6 GB VM, internal.

@@ -298,9 +298,23 @@ BYOA_LOAD_CURVE=(30 25 20 20 20 25 35 50 70 85 95 100 100 95 100 100 95 85 70 60
 BYOA_LOAD_PID="${BYOA_LOAD_PID:-$HOME/.byoa-load.pid}"
 BYOA_LOAD_LOG="${BYOA_LOAD_LOG:-$HOME/.byoa-load.log}"
 BYOA_LOAD_STATE="${BYOA_LOAD_STATE:-$HOME/.byoa-load.state}"
-BYOA_PEAK_ASTRO_USERS="${BYOA_PEAK_ASTRO_USERS:-20}"
-BYOA_PEAK_HIPSTER_USERS="${BYOA_PEAK_HIPSTER_USERS:-20}"
-BYOA_PEAK_EASYTRADE_GENS="${BYOA_PEAK_EASYTRADE_GENS:-3}"
+# Peaks sized for one m6a.4xlarge (D-14, R-11). astroshop runs LOCUST_BROWSER_TRAFFIC_ENABLED, so
+# every Locust user drives a headless Chromium; easytrade's headlessloadgen is Chrome as well.
+# At 20 / 20 / 3 the staging box hit 58.5 of 59.3 GiB with 158 OOM kills, all of them in the
+# load generators (chrome, crashpad, node, locust). Plain-HTTP Locust (hipstershop) is cheap.
+BYOA_PEAK_ASTRO_USERS="${BYOA_PEAK_ASTRO_USERS:-6}"
+BYOA_PEAK_HIPSTER_USERS="${BYOA_PEAK_HIPSTER_USERS:-10}"
+BYOA_PEAK_EASYTRADE_GENS="${BYOA_PEAK_EASYTRADE_GENS:-1}"
+# Explicit envelope for each load generator: "<context> <namespace> <deploy> <request> <limit>".
+BYOA_LOADGEN_LIMITS=(
+  "shop astroshop load-generator 1Gi 3Gi"
+  "shop hipstershop loadgenerator 128Mi 512Mi"
+  "ops easytrade headlessloadgen 512Mi 1Gi"
+)
+# The slot's memory guard: below this much headroom the shaper runs at half its curve value.
+BYOA_MIN_HEADROOM_MIB="${BYOA_MIN_HEADROOM_MIB:-14336}"
+# cgroup v2 root of the slot as seen from inside it; a test points it elsewhere.
+BYOA_CGROUP_DIR="${BYOA_CGROUP_DIR:-/sys/fs/cgroup}"
 
 # byoaLoadTargets <percent> — "<astroshop users> <hipstershop users> <easytrade generators>", never 0
 byoaLoadTargets() {
@@ -309,6 +323,46 @@ byoaLoadTargets() {
   h=$(( BYOA_PEAK_HIPSTER_USERS * pct / 100 )); (( h < 2 )) && h=2
   e=$(( (BYOA_PEAK_EASYTRADE_GENS * pct + 50) / 100 )); (( e < 1 )) && e=1
   echo "$a $h $e"
+}
+
+# byoaCapLoadGenerators — pin requests/limits on every load generator. Idempotent: the same
+# values again change nothing, so no pod restarts on a re-run.
+byoaCapLoadGenerators() {
+  local spec ctx ns dep req lim rc=0
+  for spec in "${BYOA_LOADGEN_LIMITS[@]}"; do
+    read -r ctx ns dep req lim <<<"$spec"
+    kubectl --context "k3d-byoa-${ctx}" -n "$ns" set resources "deploy/$dep" \
+      --requests="memory=$req" --limits="memory=$lim" >/dev/null 2>&1 \
+      || { printWarn "could not cap $ns/$dep"; rc=1; }
+  done
+  return "$rc"
+}
+
+# byoaSlotMem — "current_mib max_mib peak_mib oom_kill" for the slot's cgroup ("" when unknown).
+# memory.max may read "max" (no limit): then MemTotal stands in for it.
+byoaSlotMem() {
+  local d="$BYOA_CGROUP_DIR" cur max peak oom
+  [[ -r "$d/memory.current" ]] || { echo ""; return 1; }
+  cur=$(( $(cat "$d/memory.current") / 1048576 ))
+  max=$(cat "$d/memory.max" 2>/dev/null || echo max)
+  if [[ "$max" == max ]]; then max=$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)
+  else max=$(( max / 1048576 )); fi
+  peak=$(( $(cat "$d/memory.peak" 2>/dev/null || echo 0) / 1048576 ))
+  oom=$(awk '/^oom_kill /{print $2}' "$d/memory.events" 2>/dev/null); oom="${oom:-0}"
+  echo "$cur $max $peak $oom"
+}
+
+# byoaLoadPercent <curve percent> — the curve value, halved while the slot is short of memory.
+byoaLoadPercent() {
+  local pct="$1" m cur max
+  m="$(byoaSlotMem)" || { echo "$pct"; return 0; }
+  read -r cur max _ _ <<<"$m"
+  if (( max - cur < BYOA_MIN_HEADROOM_MIB )); then
+    echo "$(date -u +%FT%TZ) memory guard: $((max - cur))Mi headroom < ${BYOA_MIN_HEADROOM_MIB}Mi, load at half" >&2
+    echo $(( pct / 2 ))
+  else
+    echo "$pct"
+  fi
 }
 
 byoaApplyLoad() {
@@ -328,7 +382,7 @@ byoaApplyLoad() {
 byoaLoadLoop() {
   local deadline=$(( $(date +%s) + BYOA_CHAOS_MAX_HOURS * 3600 ))
   while (( $(date +%s) < deadline )); do
-    byoaApplyLoad "${BYOA_LOAD_CURVE[$((10#$(date -u +%H)))]}"
+    byoaApplyLoad "$(byoaLoadPercent "${BYOA_LOAD_CURVE[$((10#$(date -u +%H)))]}")"
     byoaFootprint
     sleep "${BYOA_LOAD_PERIOD:-3600}"
   done
@@ -368,6 +422,9 @@ byoaFootprint() {
   awk -v ts="$ts" '/MemTotal/{t=$2} /MemAvailable/{a=$2} END {printf "%s host mem_total=%dMi mem_available=%dMi\n", ts, t/1024, a/1024}' \
     /proc/meminfo >> "$BYOA_FOOTPRINT_LOG"
   echo "$ts host load=$(cut -d' ' -f1-3 /proc/loadavg) cpus=$(nproc)" >> "$BYOA_FOOTPRINT_LOG"
+  local m cur max peak oom; m="$(byoaSlotMem)" && read -r cur max peak oom <<<"$m" \
+    && echo "$ts slot mem_current=${cur}Mi mem_max=${max}Mi mem_peak=${peak}Mi oom_kill=${oom}" >> "$BYOA_FOOTPRINT_LOG"
+  return 0
 }
 
 # ── App secrets that carry a Dynatrace token ─────────────────────────
