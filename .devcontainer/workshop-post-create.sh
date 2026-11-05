@@ -33,6 +33,9 @@ byoaUseCluster sec
 byoaDeployDynatrace sec
 byoaDeployUnguard
 
+# Every load generator gets an explicit memory envelope before the shaper starts (D-14).
+byoaCapLoadGenerators
+
 # Faults, traffic and the day curve. workshop-post-start.sh restarts all three on every start;
 # starting them here too means a box built a day ahead produces problems from the first hour.
 startProblemGenerator
