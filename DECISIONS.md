@@ -233,8 +233,8 @@ Where things live:
     - Explicit memory requests and limits on the three generators (`BYOA_LOADGEN_LIMITS`).
     - A memory guard: below 14 GiB of slot headroom the shaper runs at half its curve value.
     - The footprint log records the slot's `memory.peak` and `oom_kill`.
-    - Target: peak ≤ ~45 GiB with 0 OOM kills. Proof: R-11.
-  - A 4th app is out until R-11 shows the headroom.
+    - Target, as changed after measuring: 0 OOM kills, anon + kernel ≤ 45 GiB, and no memory pressure. `memory.peak` cannot be the measure, because it counts the k3d nodes' image cache (about 37 GiB, reclaimable) and sits near the ceiling on any box this size. Result (R-11): anon + kernel 20.2 GiB at 100 % load, 0 kills, pressure 0.
+  - A 4th app: anon + kernel leaves about 39 GiB of real headroom, so one more app fits by memory. The decision stays open, owner's call.
   - A bigger shape (r6a.4xlarge: 16 vCPU / 128 GiB) is an owner decision. It is not proposed yet.
 - **Left out, and why:**
   - **The travel site:** not containerised, needs a 6 GB VM, internal.
