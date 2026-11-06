@@ -626,6 +626,12 @@ byoaDynakubeHealth() {
   return $ok
 }
 
+# trainingHealth — the shared-box health hook Orbital's worker polls on a ready shared machine
+# (BUG-199). Contract: one line per component, "<name> <status> <why…>", status "ok" or a
+# problem word; exit 0 only when all are ok. Read-only, never prints a secret, must finish
+# well inside the poller's timeout. A training without this function is simply not polled.
+trainingHealth() { byoaDynakubeHealth; }
+
 checkSharedBoxReady() {
   local c ok=0
   for c in "${BYOA_CLUSTERS[@]}"; do

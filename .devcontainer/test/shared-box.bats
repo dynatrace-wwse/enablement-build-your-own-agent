@@ -434,3 +434,13 @@ healthy() { dk_json Running True StatusUpdated > "$BATS_TEST_TMPDIR/$1.dk"; echo
   [ "$status" -eq 1 ]
   [[ "${lines[2]}" == "sec error "* ]]
 }
+
+@test "trainingHealth is the Orbital poller's hook and reports what byoaDynakubeHealth reports" {
+  dk_stub; healthy shop; healthy ops
+  dk_json Error False StatusOutdated > "$BATS_TEST_TMPDIR/sec.dk"
+  echo "$ERR_401" > "$BATS_TEST_TMPDIR/sec.log"
+  run trainingHealth
+  [ "$status" -eq 1 ]
+  [ "${#lines[@]}" -eq 3 ]
+  [[ "${lines[2]}" == "sec token-rejected "* ]]
+}
