@@ -260,3 +260,104 @@ slot() {  # slot <current_mib> <max_mib|max> <peak_mib> <oom_kill>
   run byoaLoadLoop
   [[ "$output" == *"memory guard"* ]]
 }
+
+# ── ENH-163 F10: the app front on :80 ────────────────────────────────
+
+_hosts_kubectl() {
+  # Stub: shop declares two hosts, ops one, sec none; every controller has an LB address
+  # unless NO_LB names the cluster.
+  kubectl() {
+    case "$*" in
+      *"get svc ingress-nginx-controller"*) [[ "$2" == "k3d-byoa-${NO_LB:-none}" ]] || echo 172.18.0.2; return ;;
+      *"get svc -A"*) return ;;
+    esac
+    case "$2" in
+      k3d-byoa-shop) printf 'astroshop.1.2.3.4.sslip.io\nastroshop.box\n' ;;
+      k3d-byoa-ops)  printf 'todoapp.1.2.3.4.sslip.io\n' ;;
+      *) : ;;
+    esac
+  }
+}
+
+@test "byoaFrontConf routes each cluster's hosts to that cluster's LB port, 404 otherwise" {
+  _hosts_kubectl
+  run byoaFrontConf
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"listen 80 default_server;"* ]]
+  [[ "$output" == *"server_name astroshop.1.2.3.4.sslip.io astroshop.box;"* ]]
+  [[ "$output" == *"proxy_pass http://127.0.0.1:30080;"* ]]
+  [[ "$output" == *"server_name todoapp.1.2.3.4.sslip.io;"* ]]
+  [[ "$output" == *"proxy_pass http://127.0.0.1:31080;"* ]]
+  [[ "$output" != *"127.0.0.1:32080"* ]]          # sec declares no host: no server block
+  [[ "$output" == *'proxy_set_header Host $host;'* ]]
+}
+
+@test "byoaFrontCheck fails when no cluster declares a host" {
+  kubectl() { :; }
+  run byoaFrontCheck
+  [ "$status" -eq 1 ]
+}
+
+@test "byoaFrontCheck fails when an app does not answer through :80, passes when all do" {
+  _hosts_kubectl
+  curl() { echo 000; }
+  run byoaFrontCheck
+  [ "$status" -eq 1 ]
+  curl() { case "$*" in *todoapp*) echo 502 ;; *) echo 200 ;; esac; }
+  run byoaFrontCheck
+  [ "$status" -eq 1 ]
+  curl() { echo 200; }
+  run byoaFrontCheck
+  [ "$status" -eq 0 ]
+}
+
+@test "byoaStartFront copies the config in (never a bind mount) and starts the front" {
+  _hosts_kubectl
+  docker() { echo "$*" >> "$BATS_TEST_TMPDIR/docker"; }
+  run byoaStartFront
+  [ "$status" -eq 0 ]
+  ! grep -q -- ' -v ' "$BATS_TEST_TMPDIR/docker"
+  grep -q '^create --name byoa-front --restart unless-stopped --network host nginx' "$BATS_TEST_TMPDIR/docker"
+  grep -q "^cp $BYOA_FRONT_CONF byoa-front:/etc/nginx/conf.d/default.conf" "$BATS_TEST_TMPDIR/docker"
+  [ "$(tail -1 "$BATS_TEST_TMPDIR/docker")" = "start byoa-front" ]
+}
+
+@test "byoaStartFront fails when the copy fails" {
+  _hosts_kubectl
+  docker() { [ "$1" != cp ]; }
+  run byoaStartFront
+  [ "$status" -eq 1 ]
+}
+
+@test "byoaFrontCheck fails when a cluster's ingress controller has no LB address" {
+  _hosts_kubectl
+  curl() { echo 200; }
+  NO_LB=ops run byoaFrontCheck
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"byoa-ops: the ingress controller has no LoadBalancer address"* ]]
+}
+
+@test "byoaFrontCheck fails when a registered app's host has no Ingress (unguard.kube case)" {
+  _hosts_kubectl
+  curl() { echo 200; }
+  export APP_REGISTRY="$BATS_TEST_TMPDIR/registry"
+  echo "todoapp|todoapp|todoapp|8080|todoapp.1.2.3.4.sslip.io||todoapp--j" > "$APP_REGISTRY"
+  run byoaFrontCheck
+  [ "$status" -eq 0 ]
+  echo "unguard|unguard|unguard-envoy-proxy|8080|unguard.1.2.3.4.sslip.io||unguard--j" >> "$APP_REGISTRY"
+  run byoaFrontCheck
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"app unguard: no Ingress declares unguard.1.2.3.4.sslip.io"* ]]
+}
+
+@test "byoaIngressOwnsLb turns every app LoadBalancer into ClusterIP, never the controller's" {
+  kubectl() {
+    case "$*" in
+      *"get svc -A"*) printf 'hipstershop frontend-external LoadBalancer 10.0.0.1 172.18.0.2 80:1/TCP 1m\ningress-nginx ingress-nginx-controller LoadBalancer 10.0.0.2 <pending> 80:2/TCP 1m\nastroshop frontend ClusterIP 10.0.0.3 <none> 8080/TCP 1m\n' ;;
+      *patch*) echo "$*" >> "$BATS_TEST_TMPDIR/patched" ;;
+    esac
+  }
+  BYOA_LB_WAIT_S=0 byoaIngressOwnsLb shop
+  [ "$(wc -l < "$BATS_TEST_TMPDIR/patched")" -eq 1 ]
+  grep -q -- '-n hipstershop patch svc frontend-external' "$BATS_TEST_TMPDIR/patched"
+}
