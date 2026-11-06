@@ -589,6 +589,43 @@ byoaFrontCheck() {
 }
 
 # ── Trainer checks (the trainer's shell only; learners have none) ────
+
+# byoaDynakubeHealth — one line per cluster: "<short> ok|token-rejected|outdated|missing|error <why>".
+# Exit 0 only when every cluster is ok. Never prints a token.
+#
+# Why (ENH-163 F13, BUG-199): when the operator token in a DynaKube's Secret is revoked or
+# expired, Dynatrace Operator 1.10.x reads builtin:cloud.kubernetes, gets HTTP 401, and leaves
+# MonitoredEntity at "kubernetesClusterMEID is outdated" with the phase at Error. The cluster
+# stops reporting while the box still looks READY. The remedy is the trainer's Refresh tokens.
+#
+# The verdict is the operator's MOST RECENT reconcile outcome, not "any 401 in the log": right
+# after a refresh the log still holds the old token's 401s, and those must not fail the refresh
+# that fixed them. A reconcile that finished after the last error is ok.
+byoaDynakubeHealth() {
+  local spec short ctx dk phase mon last ok=0
+  for spec in "${BYOA_CLUSTERS[@]}"; do
+    short="${spec%%:*}"; ctx="k3d-byoa-${short}"
+    dk="$(kubectl --context "$ctx" -n dynatrace get dynakube -o json 2>/dev/null)"
+    if [[ -z "$dk" ]] || [[ "$(jq '.items | length' <<<"$dk" 2>/dev/null)" != 1 ]]; then
+      echo "$short missing no DynaKube in ns dynatrace"; ok=1; continue
+    fi
+    phase="$(jq -r '.items[0].status.phase // ""' <<<"$dk")"
+    mon="$(jq -r '.items[0].status.conditions // [] | map(select(.type=="MonitoredEntity"))[0] | "\(.status // "")|\(.reason // "")"' <<<"$dk")"
+    last="$(kubectl --context "$ctx" -n dynatrace logs deploy/dynatrace-operator --since="${BYOA_DK_HEALTH_SINCE:-10m}" 2>/dev/null \
+            | grep -E '"msg":"(Reconciler error|finished DynaKube reconcile)"' | tail -1)"
+    if [[ "$last" == *'Reconciler error'* && "$last" =~ HTTP\ 401 ]]; then
+      echo "$short token-rejected operator token refused (HTTP 401): press Refresh tokens"; ok=1
+    elif [[ "$mon" == "False|StatusOutdated" ]]; then
+      echo "$short outdated kubernetesClusterMEID is outdated (settings read failing)"; ok=1
+    elif [[ "$phase" == "Error" ]]; then
+      echo "$short error DynaKube phase Error"; ok=1
+    else
+      echo "$short ok ${phase:-unknown}"
+    fi
+  done
+  return $ok
+}
+
 checkSharedBoxReady() {
   local c ok=0
   for c in "${BYOA_CLUSTERS[@]}"; do
@@ -600,6 +637,13 @@ checkSharedBoxReady() {
     fi
   done
   byoaFrontCheck || ok=1
+  local line
+  while read -r line; do
+    case "${line#* }" in
+      ok*) printInfo "dynatrace ${line}" ;;
+      *)   printError "dynatrace ${line}"; ok=1 ;;
+    esac
+  done < <(byoaDynakubeHealth)
   isProblemGeneratorRunning && printInfo "problem generator: running" || { printError "problem generator: NOT running"; ok=1; }
   isLoadShaperRunning && printInfo "load shaper: running" || { printError "load shaper: NOT running"; ok=1; }
   return $ok
