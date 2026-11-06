@@ -504,12 +504,16 @@ EOF
 }
 
 # byoaStartFront — (re)write the config and (re)start the front. Run after every deploy, and on
-# every start: a cluster that gained an app gains its host here.
+# every start: a cluster that gained an app gains its host here. The config is COPIED in, never
+# bind-mounted: the docker daemon is the slot's (docker-in-docker), and a path in this container
+# does not exist there — a -v mount of it fails with "not a directory".
 byoaStartFront() {
   byoaFrontConf > "$BYOA_FRONT_CONF" || return 1
   docker rm -f "$BYOA_FRONT_NAME" >/dev/null 2>&1 || true
-  if ! docker run -d --name "$BYOA_FRONT_NAME" --restart unless-stopped --network host \
-      -v "$BYOA_FRONT_CONF:/etc/nginx/conf.d/default.conf:ro" "$BYOA_FRONT_IMAGE" >/dev/null; then
+  if ! docker create --name "$BYOA_FRONT_NAME" --restart unless-stopped --network host \
+         "$BYOA_FRONT_IMAGE" >/dev/null \
+      || ! docker cp "$BYOA_FRONT_CONF" "$BYOA_FRONT_NAME:/etc/nginx/conf.d/default.conf" \
+      || ! docker start "$BYOA_FRONT_NAME" >/dev/null; then
     printError "app front: could not start $BYOA_FRONT_NAME on :$BYOA_FRONT_PORT"
     return 1
   fi

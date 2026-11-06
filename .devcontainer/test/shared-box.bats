@@ -305,3 +305,21 @@ _hosts_kubectl() {
   run byoaFrontCheck
   [ "$status" -eq 0 ]
 }
+
+@test "byoaStartFront copies the config in (never a bind mount) and starts the front" {
+  _hosts_kubectl
+  docker() { echo "$*" >> "$BATS_TEST_TMPDIR/docker"; }
+  run byoaStartFront
+  [ "$status" -eq 0 ]
+  ! grep -q -- ' -v ' "$BATS_TEST_TMPDIR/docker"
+  grep -q '^create --name byoa-front --restart unless-stopped --network host nginx' "$BATS_TEST_TMPDIR/docker"
+  grep -q "^cp $BYOA_FRONT_CONF byoa-front:/etc/nginx/conf.d/default.conf" "$BATS_TEST_TMPDIR/docker"
+  [ "$(tail -1 "$BATS_TEST_TMPDIR/docker")" = "start byoa-front" ]
+}
+
+@test "byoaStartFront fails when the copy fails" {
+  _hosts_kubectl
+  docker() { [ "$1" != cp ]; }
+  run byoaStartFront
+  [ "$status" -eq 1 ]
+}
