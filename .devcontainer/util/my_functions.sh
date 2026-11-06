@@ -288,8 +288,13 @@ byoaDeployHipsterShop() {
 BYOA_UNGUARD_ATTACKS="${BYOA_UNGUARD_ATTACKS:-true}"
 byoaDeployUnguard() {
   helm status unguard -n unguard >/dev/null 2>&1 || deployUnguard || return 1
+  # The chart's own Ingress is named unguard-ingress (host unguard.kube), the same name registerApp
+  # gives the app's: every upgrade replaced the registered host, so Orbital's window got a 404
+  # (ENH-163 F10). Renamed here, then the registered Ingress is written again.
   helm upgrade unguard oci://ghcr.io/dynatrace-oss/unguard/chart/unguard --version 0.12.0 -n unguard \
-    --reuse-values --set maliciousLoadGenerator.enabled="$BYOA_UNGUARD_ATTACKS" >/dev/null
+    --reuse-values --set maliciousLoadGenerator.enabled="$BYOA_UNGUARD_ATTACKS" \
+    --set ingress.name=chart-ingress >/dev/null || return 1
+  registerApp "unguard" "unguard" "unguard-envoy-proxy" 8080 >/dev/null
 }
 
 # ── Traffic over the day ─────────────────────────────────────────────
@@ -503,11 +508,29 @@ EOF
   done
 }
 
+# byoaIngressOwnsLb <short> — make the cluster's ingress controller the only LoadBalancer.
+# hipstershop and easytrade ship a LoadBalancer Service of their own on port 80. klipper-lb gives
+# :80 to whichever claims it first, so on a box that deployed them before the controller existed
+# the cluster's whole port went to ONE app whatever the Host (astroshop's window showed
+# hipstershop) and the controller sat <pending>. Their Ingresses point at the same Services, so
+# ClusterIP loses nothing.
+byoaIngressOwnsLb() {
+  local ctx="k3d-byoa-$1" ns name
+  while read -r ns name; do
+    [[ -n "$name" && "$ns" != ingress-nginx ]] || continue
+    kubectl --context "$ctx" -n "$ns" patch svc "$name" --type merge \
+      -p '{"spec":{"type":"ClusterIP","externalTrafficPolicy":null}}' >/dev/null \
+      && printInfo "cluster byoa-$1: $ns/$name is ClusterIP (the ingress controller owns :80)"
+  done < <(kubectl --context "$ctx" get svc -A --no-headers 2>/dev/null | awk '$3=="LoadBalancer" {print $1, $2}')
+}
+
 # byoaStartFront — (re)write the config and (re)start the front. Run after every deploy, and on
 # every start: a cluster that gained an app gains its host here. The config is COPIED in, never
 # bind-mounted: the docker daemon is the slot's (docker-in-docker), and a path in this container
 # does not exist there — a -v mount of it fails with "not a directory".
 byoaStartFront() {
+  local spec
+  for spec in "${BYOA_CLUSTERS[@]}"; do byoaIngressOwnsLb "${spec%%:*}"; done
   byoaFrontConf > "$BYOA_FRONT_CONF" || return 1
   docker rm -f "$BYOA_FRONT_NAME" >/dev/null 2>&1 || true
   if ! docker create --name "$BYOA_FRONT_NAME" --restart unless-stopped --network host \
@@ -520,10 +543,28 @@ byoaStartFront() {
   printInfo "app front: $BYOA_FRONT_NAME on :$BYOA_FRONT_PORT, $(grep -c '^  server_name' "$BYOA_FRONT_CONF") cluster(s)"
 }
 
-# byoaFrontCheck — every declared host answers below 400 through the front. Fails on a box
-# with no front, no controller, or no declared host at all.
+# byoaFrontCheck — what Orbital needs to open every left-pane app:
+#  - each cluster's ingress controller holds the LoadBalancer address (else one app owns :80);
+#  - every host in the app registry (what Orbital sends as Host) is declared by some Ingress;
+#  - every declared host answers below 400 through the front.
+# A status code alone cannot tell a wrong app from the right one, hence the first two.
 byoaFrontCheck() {
-  local spec short h code n=0 ok=0
+  local spec short h code lb n=0 ok=0
+  for spec in "${BYOA_CLUSTERS[@]}"; do
+    short="${spec%%:*}"
+    lb="$(kubectl --context "k3d-byoa-$short" -n ingress-nginx get svc ingress-nginx-controller \
+      -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)"
+    if [[ -z "$lb" ]]; then
+      printError "cluster byoa-$short: the ingress controller has no LoadBalancer address"; ok=1
+    fi
+  done
+  local declared; declared="$(for spec in "${BYOA_CLUSTERS[@]}"; do byoaClusterHosts "${spec%%:*}"; done)"
+  if [[ -f "${APP_REGISTRY:-}" ]]; then
+    while IFS='|' read -r name _ _ _ host _; do
+      [[ -n "$host" ]] || continue
+      grep -qxF "$host" <<<"$declared" || { printError "app $name: no Ingress declares $host"; ok=1; }
+    done < "$APP_REGISTRY"
+  fi
   for spec in "${BYOA_CLUSTERS[@]}"; do
     short="${spec%%:*}"
     for h in $(byoaClusterHosts "$short"); do

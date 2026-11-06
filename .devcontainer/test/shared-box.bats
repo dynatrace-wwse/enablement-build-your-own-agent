@@ -264,8 +264,13 @@ slot() {  # slot <current_mib> <max_mib|max> <peak_mib> <oom_kill>
 # ── ENH-163 F10: the app front on :80 ────────────────────────────────
 
 _hosts_kubectl() {
-  # Stub: shop declares two hosts, ops one, sec none.
+  # Stub: shop declares two hosts, ops one, sec none; every controller has an LB address
+  # unless NO_LB names the cluster.
   kubectl() {
+    case "$*" in
+      *"get svc ingress-nginx-controller"*) [[ "$2" == "k3d-byoa-${NO_LB:-none}" ]] || echo 172.18.0.2; return ;;
+      *"get svc -A"*) return ;;
+    esac
     case "$2" in
       k3d-byoa-shop) printf 'astroshop.1.2.3.4.sslip.io\nastroshop.box\n' ;;
       k3d-byoa-ops)  printf 'todoapp.1.2.3.4.sslip.io\n' ;;
@@ -322,4 +327,37 @@ _hosts_kubectl() {
   docker() { [ "$1" != cp ]; }
   run byoaStartFront
   [ "$status" -eq 1 ]
+}
+
+@test "byoaFrontCheck fails when a cluster's ingress controller has no LB address" {
+  _hosts_kubectl
+  curl() { echo 200; }
+  NO_LB=ops run byoaFrontCheck
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"byoa-ops: the ingress controller has no LoadBalancer address"* ]]
+}
+
+@test "byoaFrontCheck fails when a registered app's host has no Ingress (unguard.kube case)" {
+  _hosts_kubectl
+  curl() { echo 200; }
+  export APP_REGISTRY="$BATS_TEST_TMPDIR/registry"
+  echo "todoapp|todoapp|todoapp|8080|todoapp.1.2.3.4.sslip.io||todoapp--j" > "$APP_REGISTRY"
+  run byoaFrontCheck
+  [ "$status" -eq 0 ]
+  echo "unguard|unguard|unguard-envoy-proxy|8080|unguard.1.2.3.4.sslip.io||unguard--j" >> "$APP_REGISTRY"
+  run byoaFrontCheck
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"app unguard: no Ingress declares unguard.1.2.3.4.sslip.io"* ]]
+}
+
+@test "byoaIngressOwnsLb turns every app LoadBalancer into ClusterIP, never the controller's" {
+  kubectl() {
+    case "$*" in
+      *"get svc -A"*) printf 'hipstershop frontend-external LoadBalancer 10.0.0.1 172.18.0.2 80:1/TCP 1m\ningress-nginx ingress-nginx-controller LoadBalancer 10.0.0.2 <pending> 80:2/TCP 1m\nastroshop frontend ClusterIP 10.0.0.3 <none> 8080/TCP 1m\n' ;;
+      *patch*) echo "$*" >> "$BATS_TEST_TMPDIR/patched" ;;
+    esac
+  }
+  byoaIngressOwnsLb shop
+  [ "$(wc -l < "$BATS_TEST_TMPDIR/patched")" -eq 1 ]
+  grep -q -- '-n hipstershop patch svc frontend-external' "$BATS_TEST_TMPDIR/patched"
 }
