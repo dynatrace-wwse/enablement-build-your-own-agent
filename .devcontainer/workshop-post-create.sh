@@ -33,6 +33,9 @@ byoaUseCluster sec
 byoaDeployDynatrace sec
 byoaDeployUnguard
 
+# Left-pane apps open through the box's :80 (ENH-163 F10).
+byoaStartFront
+
 # Every load generator gets an explicit memory envelope before the shaper starts (D-14).
 byoaCapLoadGenerators
 

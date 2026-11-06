@@ -260,3 +260,48 @@ slot() {  # slot <current_mib> <max_mib|max> <peak_mib> <oom_kill>
   run byoaLoadLoop
   [[ "$output" == *"memory guard"* ]]
 }
+
+# ── ENH-163 F10: the app front on :80 ────────────────────────────────
+
+_hosts_kubectl() {
+  # Stub: shop declares two hosts, ops one, sec none.
+  kubectl() {
+    case "$2" in
+      k3d-byoa-shop) printf 'astroshop.1.2.3.4.sslip.io\nastroshop.box\n' ;;
+      k3d-byoa-ops)  printf 'todoapp.1.2.3.4.sslip.io\n' ;;
+      *) : ;;
+    esac
+  }
+}
+
+@test "byoaFrontConf routes each cluster's hosts to that cluster's LB port, 404 otherwise" {
+  _hosts_kubectl
+  run byoaFrontConf
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"listen 80 default_server;"* ]]
+  [[ "$output" == *"server_name astroshop.1.2.3.4.sslip.io astroshop.box;"* ]]
+  [[ "$output" == *"proxy_pass http://127.0.0.1:30080;"* ]]
+  [[ "$output" == *"server_name todoapp.1.2.3.4.sslip.io;"* ]]
+  [[ "$output" == *"proxy_pass http://127.0.0.1:31080;"* ]]
+  [[ "$output" != *"127.0.0.1:32080"* ]]          # sec declares no host: no server block
+  [[ "$output" == *'proxy_set_header Host $host;'* ]]
+}
+
+@test "byoaFrontCheck fails when no cluster declares a host" {
+  kubectl() { :; }
+  run byoaFrontCheck
+  [ "$status" -eq 1 ]
+}
+
+@test "byoaFrontCheck fails when an app does not answer through :80, passes when all do" {
+  _hosts_kubectl
+  curl() { echo 000; }
+  run byoaFrontCheck
+  [ "$status" -eq 1 ]
+  curl() { case "$*" in *todoapp*) echo 502 ;; *) echo 200 ;; esac; }
+  run byoaFrontCheck
+  [ "$status" -eq 1 ]
+  curl() { echo 200; }
+  run byoaFrontCheck
+  [ "$status" -eq 0 ]
+}

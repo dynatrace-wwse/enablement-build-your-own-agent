@@ -83,7 +83,10 @@ byoaUseCluster() {
   else
     createK3dCluster || return 1
   fi
-  waitK3dApiReady
+  waitK3dApiReady || return 1
+  # createK3dCluster (unlike startK3dCluster) installs no controller, so the Ingress objects
+  # registerApp writes were never served (ENH-163 F10). Idempotent on the current context.
+  installIngressController
 }
 
 # byoaDeployDynatrace <short> — operator + one DynaKube in the CURRENT cluster.
@@ -445,6 +448,94 @@ byoaRefreshAstroshopSecret() {
     && kubectl --context "$ctx" -n astroshop rollout status deploy otel-collector --timeout=120s >/dev/null
 }
 
+# ── The app front on :80 (ENH-163 F10) ───────────────────────────────
+#
+# Orbital opens every registered app through the box's port 80: the worker publishes only that
+# port, and /proxy-subdomain/ sends the app's ingress host as Host. The clusters' load balancers
+# sit on 30080/31080/32080, so without a front nothing answers on 80 and every left-pane app is
+# 502 "could not connect to app" (the BUG-192 failure of test-internal-shared-workshop, here with
+# three clusters). One nginx on the box's network routes each cluster's Ingress hosts to that
+# cluster's LB port; a host no cluster declares gets 404.
+BYOA_FRONT_NAME="${BYOA_FRONT_NAME:-byoa-front}"
+BYOA_FRONT_PORT="${BYOA_FRONT_PORT:-80}"
+BYOA_FRONT_IMAGE="${BYOA_FRONT_IMAGE:-nginx:1.27-alpine}"
+BYOA_FRONT_CONF="${BYOA_FRONT_CONF:-$HOME/.byoa-front.conf}"
+
+# byoaClusterHosts <short> — the Ingress hosts declared in one cluster, one per line.
+byoaClusterHosts() {
+  kubectl --context "k3d-byoa-$1" get ingress -A \
+    -o jsonpath='{range .items[*]}{range .spec.rules[*]}{.host}{"\n"}{end}{end}' 2>/dev/null \
+    | grep -v '^$' | sort -u
+}
+
+# byoaFrontConf — print the nginx config: one server per cluster that declares hosts.
+byoaFrontConf() {
+  local spec short http hosts
+  cat <<EOF
+map \$http_upgrade \$byoa_conn { default upgrade; '' close; }
+server {
+  listen ${BYOA_FRONT_PORT} default_server;
+  return 404 "no app on this box answers to \$host\n";
+}
+EOF
+  for spec in "${BYOA_CLUSTERS[@]}"; do
+    IFS=: read -r short http _ _ <<<"$spec"
+    hosts="$(byoaClusterHosts "$short" | tr '\n' ' ')"
+    [[ -n "${hosts// /}" ]] || continue
+    cat <<EOF
+server {
+  listen ${BYOA_FRONT_PORT};
+  server_name ${hosts% };
+  client_max_body_size 50m;
+  location / {
+    proxy_pass http://127.0.0.1:${http};
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$http_x_forwarded_host;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection \$byoa_conn;
+    proxy_read_timeout 3600;
+    proxy_send_timeout 3600;
+  }
+}
+EOF
+  done
+}
+
+# byoaStartFront — (re)write the config and (re)start the front. Run after every deploy, and on
+# every start: a cluster that gained an app gains its host here.
+byoaStartFront() {
+  byoaFrontConf > "$BYOA_FRONT_CONF" || return 1
+  docker rm -f "$BYOA_FRONT_NAME" >/dev/null 2>&1 || true
+  if ! docker run -d --name "$BYOA_FRONT_NAME" --restart unless-stopped --network host \
+      -v "$BYOA_FRONT_CONF:/etc/nginx/conf.d/default.conf:ro" "$BYOA_FRONT_IMAGE" >/dev/null; then
+    printError "app front: could not start $BYOA_FRONT_NAME on :$BYOA_FRONT_PORT"
+    return 1
+  fi
+  printInfo "app front: $BYOA_FRONT_NAME on :$BYOA_FRONT_PORT, $(grep -c '^  server_name' "$BYOA_FRONT_CONF") cluster(s)"
+}
+
+# byoaFrontCheck — every declared host answers below 400 through the front. Fails on a box
+# with no front, no controller, or no declared host at all.
+byoaFrontCheck() {
+  local spec short h code n=0 ok=0
+  for spec in "${BYOA_CLUSTERS[@]}"; do
+    short="${spec%%:*}"
+    for h in $(byoaClusterHosts "$short"); do
+      n=$((n + 1))
+      code="$(curl -s -o /dev/null -m 20 -w '%{http_code}' -H "Host: $h" "http://127.0.0.1:${BYOA_FRONT_PORT}/")"
+      if [[ "$code" =~ ^[123][0-9][0-9]$ ]]; then
+        printInfo "app $h via :${BYOA_FRONT_PORT}: $code"
+      else
+        printError "app $h via :${BYOA_FRONT_PORT}: ${code:-no answer}"; ok=1
+      fi
+    done
+  done
+  if [[ "$n" -eq 0 ]]; then printError "app front: no cluster declares an app host"; return 1; fi
+  return $ok
+}
+
 # ── Trainer checks (the trainer's shell only; learners have none) ────
 checkSharedBoxReady() {
   local c ok=0
@@ -456,6 +547,7 @@ checkSharedBoxReady() {
       printError "cluster byoa-${short}: not Ready"; ok=1
     fi
   done
+  byoaFrontCheck || ok=1
   isProblemGeneratorRunning && printInfo "problem generator: running" || { printError "problem generator: NOT running"; ok=1; }
   isLoadShaperRunning && printInfo "load shaper: running" || { printError "load shaper: NOT running"; ok=1; }
   return $ok

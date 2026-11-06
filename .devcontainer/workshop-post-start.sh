@@ -24,6 +24,7 @@ done
 # deployDynatrace already handles): rewrite it and restart the collector when it changed.
 byoaRefreshAstroshopSecret || { printError "astroshop dt-credentials refresh failed: its collector may hold the OLD ingest token"; dt_rc=1; }
 
+byoaStartFront
 startProblemGenerator
 startTodoTraffic
 startLoadShaper
