@@ -515,13 +515,20 @@ EOF
 # hipstershop) and the controller sat <pending>. Their Ingresses point at the same Services, so
 # ClusterIP loses nothing.
 byoaIngressOwnsLb() {
-  local ctx="k3d-byoa-$1" ns name
+  local ctx="k3d-byoa-$1" ns name i
   while read -r ns name; do
     [[ -n "$name" && "$ns" != ingress-nginx ]] || continue
     kubectl --context "$ctx" -n "$ns" patch svc "$name" --type merge \
       -p '{"spec":{"type":"ClusterIP","externalTrafficPolicy":null}}' >/dev/null \
       && printInfo "cluster byoa-$1: $ns/$name is ClusterIP (the ingress controller owns :80)"
   done < <(kubectl --context "$ctx" get svc -A --no-headers 2>/dev/null | awk '$3=="LoadBalancer" {print $1, $2}')
+  # klipper hands :80 over a few seconds after the patch (staging: ~5 s).
+  for ((i = 0; i < ${BYOA_LB_WAIT_S:-60}; i += 5)); do
+    [[ -n "$(kubectl --context "$ctx" -n ingress-nginx get svc ingress-nginx-controller \
+      -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)" ]] && return 0
+    sleep 5
+  done
+  printWarn "cluster byoa-$1: the ingress controller has no LoadBalancer address yet"
 }
 
 # byoaStartFront — (re)write the config and (re)start the front. Run after every deploy, and on

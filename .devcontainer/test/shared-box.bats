@@ -357,7 +357,7 @@ _hosts_kubectl() {
       *patch*) echo "$*" >> "$BATS_TEST_TMPDIR/patched" ;;
     esac
   }
-  byoaIngressOwnsLb shop
+  BYOA_LB_WAIT_S=0 byoaIngressOwnsLb shop
   [ "$(wc -l < "$BATS_TEST_TMPDIR/patched")" -eq 1 ]
   grep -q -- '-n hipstershop patch svc frontend-external' "$BATS_TEST_TMPDIR/patched"
 }
