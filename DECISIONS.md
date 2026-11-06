@@ -257,3 +257,13 @@ Where things live:
 - **Repo-owned files from 1.18 to 1.20.3:** sync's migration changed none of the files this repo owns. The framework side adds the BUG-181 refresh, astroshop-lite, recognition of the shared-workshop scripts (ENH-146 F1), and helm 3.22.1.
 - **Proof:** R-09.
 
+
+## D-17 · Framework 1.22.0: the box registers its clusters itself (orch GO, 2026-11-06)
+
+- **What:** `FRAMEWORK_VERSION` 1.20.3 → 1.22.0. The image stays v1.4.0 (1.22.0 pins the same).
+- **Why:** BUG-199 (e), ENH-163 F13. A cluster appears in Dynatrace only once a `builtin:cloud.kubernetes` object carries its kube-system UID. The operator creates one only when its token has an effective `settings.write`, and skips it silently otherwise: the DynaKube then reads "kubernetesClusterMEID is outdated" and the cluster never shows up. That is the owner's COE run of 2026-11-06. From 1.22.0, `deployDynatrace` (which `byoaDeployDynatrace` calls once per cluster) finds or creates that object, labelled with the DynaKube name, and verifies the DynaKube reports its MEID.
+- **Fatal here:** the shared box runs with `ORBITAL_SHARED_ROLE=shared`, so a cluster that cannot be registered fails the build, instead of a box reading READY while sending nothing. A seat (no shared role) gets a warning only.
+- **Also in this jump:** framework 1.21.0 moved Dynatrace Operator 1.10.2 → 1.11.1 and checks the generated DynaKube before applying it (BUG-167).
+- **Not yet:** removing the objects at teardown needs Orbital's pre-stop to call `frameworkTeardown` (follow-up). Until then, ending a workshop leaves its 3 objects in the tenant, as today.
+- **How:** a hand edit of the pin, as in D-16 (this private repo is not in `repos.yaml`). No other repo was bumped (orch: the rest pick 1.22.0 up on their next normal sync).
+- **Proof:** R-14.
