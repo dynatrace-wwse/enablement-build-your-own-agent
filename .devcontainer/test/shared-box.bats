@@ -361,3 +361,86 @@ _hosts_kubectl() {
   [ "$(wc -l < "$BATS_TEST_TMPDIR/patched")" -eq 1 ]
   grep -q -- '-n hipstershop patch svc frontend-external' "$BATS_TEST_TMPDIR/patched"
 }
+
+# ── byoaDynakubeHealth (ENH-163 F13, BUG-199) ─────────────────────────
+# kubectl is stubbed per cluster from files: $BATS_TEST_TMPDIR/<short>.dk (dynakube JSON) and
+# <short>.log (operator log). Fixture lines are shaped like Dynatrace Operator 1.10.2's output.
+dk_stub() {
+  kubectl() {
+    local ctx="" a; for a in "$@"; do [[ "$prev" == --context ]] && ctx="$a"; prev="$a"; done
+    local short="${ctx#k3d-byoa-}"
+    case "$*" in
+      *"get dynakube"*) cat "$BATS_TEST_TMPDIR/$short.dk" 2>/dev/null ;;
+      *"logs deploy/dynatrace-operator"*) cat "$BATS_TEST_TMPDIR/$short.log" 2>/dev/null ;;
+    esac
+  }
+  export -f kubectl
+}
+dk_json() {  # <phase> <MonitoredEntity status> <reason>
+  printf '{"items":[{"status":{"phase":"%s","conditions":[{"type":"Tokens","status":"True","reason":"TokenReady"},{"type":"MonitoredEntity","status":"%s","reason":"%s"}]}}]}' "$1" "$2" "$3"
+}
+OK_LINE='{"level":"info","msg":"finished DynaKube reconcile"}'
+ERR_401='{"level":"error","msg":"Reconciler error","error":"get kubernetesClusterMEID: get k8s monitored entity: HTTP 401: Token Authentication failed"}'
+ERR_OTHER='{"level":"error","msg":"Reconciler error","error":"HTTP 503: Service Unavailable"}'
+healthy() { dk_json Running True StatusUpdated > "$BATS_TEST_TMPDIR/$1.dk"; echo "$OK_LINE" > "$BATS_TEST_TMPDIR/$1.log"; }
+
+@test "dynakube health: three healthy clusters are ok" {
+  dk_stub; healthy shop; healthy ops; healthy sec
+  run byoaDynakubeHealth
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "shop ok Running" ]
+  [ "${#lines[@]}" -eq 3 ]
+}
+
+@test "dynakube health: a revoked operator token (the F13 state) is token-rejected" {
+  dk_stub; healthy shop; healthy ops
+  dk_json Error False StatusOutdated > "$BATS_TEST_TMPDIR/sec.dk"
+  printf '%s\n%s\n' "$OK_LINE" "$ERR_401" > "$BATS_TEST_TMPDIR/sec.log"
+  run byoaDynakubeHealth
+  [ "$status" -eq 1 ]
+  [[ "${lines[2]}" == "sec token-rejected "* ]]
+}
+
+@test "dynakube health: old 401s followed by a finished reconcile (after Refresh) are ok" {
+  dk_stub; healthy shop; healthy ops
+  dk_json Running True StatusUpdated > "$BATS_TEST_TMPDIR/sec.dk"
+  printf '%s\n%s\n%s\n' "$ERR_401" "$ERR_401" "$OK_LINE" > "$BATS_TEST_TMPDIR/sec.log"
+  run byoaDynakubeHealth
+  [ "$status" -eq 0 ]
+  [ "${lines[2]}" = "sec ok Running" ]
+}
+
+@test "dynakube health: MEID outdated without a 401 in the log is still not ok" {
+  dk_stub; healthy shop; healthy ops
+  dk_json Running False StatusOutdated > "$BATS_TEST_TMPDIR/sec.dk"
+  echo "$ERR_OTHER" > "$BATS_TEST_TMPDIR/sec.log"
+  run byoaDynakubeHealth
+  [ "$status" -eq 1 ]
+  [[ "${lines[2]}" == "sec outdated "* ]]
+}
+
+@test "dynakube health: a missing DynaKube is reported, not skipped" {
+  dk_stub; healthy shop; healthy sec
+  run byoaDynakubeHealth
+  [ "$status" -eq 1 ]
+  [[ "${lines[1]}" == "ops missing "* ]]
+}
+
+@test "dynakube health: a non-401 reconcile error with phase Error is error, not token-rejected" {
+  dk_stub; healthy shop; healthy ops
+  dk_json Error True StatusUpdated > "$BATS_TEST_TMPDIR/sec.dk"
+  echo "$ERR_OTHER" > "$BATS_TEST_TMPDIR/sec.log"
+  run byoaDynakubeHealth
+  [ "$status" -eq 1 ]
+  [[ "${lines[2]}" == "sec error "* ]]
+}
+
+@test "trainingHealth is the Orbital poller's hook and reports what byoaDynakubeHealth reports" {
+  dk_stub; healthy shop; healthy ops
+  dk_json Error False StatusOutdated > "$BATS_TEST_TMPDIR/sec.dk"
+  echo "$ERR_401" > "$BATS_TEST_TMPDIR/sec.log"
+  run trainingHealth
+  [ "$status" -eq 1 ]
+  [ "${#lines[@]}" -eq 3 ]
+  [[ "${lines[2]}" == "sec token-rejected "* ]]
+}
