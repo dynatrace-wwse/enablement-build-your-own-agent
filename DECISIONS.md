@@ -266,4 +266,5 @@ Where things live:
 - **Also in this jump:** framework 1.21.0 moved Dynatrace Operator 1.10.2 → 1.11.1 and checks the generated DynaKube before applying it (BUG-167).
 - **Not yet:** removing the objects at teardown needs Orbital's pre-stop to call `frameworkTeardown` (follow-up). Until then, ending a workshop leaves its 3 objects in the tenant, as today.
 - **How:** a hand edit of the pin, as in D-16 (this private repo is not in `repos.yaml`). No other repo was bumped (orch: the rest pick 1.22.0 up on their next normal sync).
-- **Proof:** R-14.
+- **Then 1.22.1 (2026-11-08):** R-14's negative control found that a registration failure on the READ returned rc 1 with no message, because the error went to stdout inside `$(…)`. On this box, where the failure is fatal, that would be a failed build with no reason. 1.22.1 (framework #224) prints it to stderr and names 401/403/404. The pin moved 1.22.0 → 1.22.1; the image is unchanged.
+- **Proof:** R-14 (the run used 1.22.0; the 1.22.1 finder was checked live on the same boxes).
