@@ -99,7 +99,7 @@ Update both with every change.
 
 Checks that need platform work are written in the pages as `<!-- PENDING_CHECK … -->` comments. The importer ignores those, so they cannot be dropped silently or fail lint. Each one becomes a `LAB_QUESTION` when its contract lands.
 
-**Anti-copy.** Today the checks match the key in the name. Anyone who types another learner's key can make that learner's check pass, or pass their own check with someone else's object. The planned fix compares the owner with the signed-in learner: `{{DT_USER_EMAIL}}` and `{{DT_USER_ID}}` (209, Q16). Workflows would join `WORKFLOW_CREATED.user.id`.
+**Anti-copy.** Today the checks match the key in the name. Anyone who types another learner's key can make that learner's check pass, or pass their own check with someone else's object. The planned fix compares the owner with the signed-in learner: `{{DT_USER_EMAIL}}` and `{{DT_USER_ID}}` (209, Q16). Step 2.3's "deployed" check already does this for workflows: it joins `WORKFLOW_CREATED.user.id` with `{{DT_USER_ID}}` (or the trainer's solution principal, `{{DT_SOLUTION_ACTOR}}`), D-18.
 
 ## Open platform contracts (with ENH-146 / agent 209)
 

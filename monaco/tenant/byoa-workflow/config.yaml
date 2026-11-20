@@ -1,0 +1,19 @@
+# Step 2.3's workflow as configuration as code (BYOA-256).
+# The trainer deploys ONE learner's copy from the shared box:
+#   byoaSolveWorkflow <learner e-mail or key>   ->  deployMonaco tenant --for <key>
+# deployMonaco exports LEARNER_KEY=<key>; the title is "<key> · BYOA triage", exactly what
+# the step asks the learner to type, so the step's "deployed" check finds it.
+# The workflow's owner and actor are the box token's owner (the workshop's service user),
+# which the check accepts as {{DT_SOLUTION_ACTOR}}.
+configs:
+  - id: byoa-triage
+    type:
+      automation:
+        resource: workflow
+    config:
+      name: BYOA triage
+      template: workflow.json
+      parameters:
+        learnerKey:
+          type: environment
+          name: LEARNER_KEY
