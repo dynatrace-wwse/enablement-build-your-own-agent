@@ -655,6 +655,28 @@ checkSharedBoxReady() {
   return $ok
 }
 
+# ── Step 2.3 solution: the learner's workflow, deployed by the trainer (BYOA-256) ──
+# Learners have no shell in a shared workshop, so the Monaco solution runs HERE, on the
+# trainer-only box, with the box's DT_MONACO_TOKEN (the only token that carries
+# automation:workflows:read/write; learner seats never do). One Monaco project per learner:
+# deployMonaco tenant --for <key> (framework >= the release with --for). The workflow title is
+# "<key> · BYOA triage", the same string step 2.3 asks the learner to type.
+#
+#   byoaSolveWorkflow   <learner e-mail or key>   deploy that learner's workflow
+#   byoaUnsolveWorkflow <learner e-mail or key>   delete it again (their check turns red)
+byoaSolveWorkflow() {
+  local key; key="$(byoaKey "${1:?usage: byoaSolveWorkflow <learner e-mail or key>}")"
+  [ -n "$key" ] || { printError "byoaSolveWorkflow: no learner key from '$1'"; return 1; }
+  printInfo "deploying step 2.3's workflow for learner key $key: \"$key · BYOA triage\""
+  deployMonaco tenant --for "$key"
+}
+
+byoaUnsolveWorkflow() {
+  local key; key="$(byoaKey "${1:?usage: byoaUnsolveWorkflow <learner e-mail or key>}")"
+  [ -n "$key" ] || { printError "byoaUnsolveWorkflow: no learner key from '$1'"; return 1; }
+  undeployMonaco tenant --for "$key"
+}
+
 # ── Seat mode (classic per-learner environment) ──────────────────────
 # One cluster, the todoapp, Dynatrace. Keeps post-create.sh and the nightly training test
 # working on today's platform; the UI exercises are identical.

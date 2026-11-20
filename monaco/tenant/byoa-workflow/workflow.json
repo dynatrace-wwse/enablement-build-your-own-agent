@@ -1,0 +1,29 @@
+{
+  "title": "{{ .learnerKey }} · BYOA triage",
+  "description": "Build Your Own Agent, step 2.3: runs the learner's triage agent every 30 minutes. Deployed by the trainer with Monaco (byoaSolveWorkflow).",
+  "isPrivate": false,
+  "trigger": {
+    "schedule": {
+      "isActive": true,
+      "trigger": { "type": "interval", "intervalMinutes": 30 },
+      "rule": null,
+      "filterParameters": {},
+      "timezone": "UTC",
+      "inputs": {}
+    }
+  },
+  "tasks": {
+    "triage": {
+      "name": "triage",
+      "description": "Run the learner's triage agent on recent problems",
+      "action": "dynatrace.davis.workflow.actions:run-agent",
+      "input": {
+        "agent": "{{ .learnerKey }}-triage-agent",
+        "prompt": "Triage the open problems. Only problems opened in the last 30 minutes.",
+        "supplementary": ""
+      },
+      "position": { "x": 0, "y": 1 },
+      "predecessors": []
+    }
+  }
+}

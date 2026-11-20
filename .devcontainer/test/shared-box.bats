@@ -444,3 +444,29 @@ healthy() { dk_json Running True StatusUpdated > "$BATS_TEST_TMPDIR/$1.dk"; echo
   [ "${#lines[@]}" -eq 3 ]
   [[ "${lines[2]}" == "sec token-rejected "* ]]
 }
+
+# ── step 2.3 solution (BYOA-256) ──
+@test "byoaSolveWorkflow deploys ONE learner's copy: deployMonaco tenant --for <key>" {
+  deployMonaco() { echo "deployMonaco $*"; }
+  run byoaSolveWorkflow Alice.Smith@example.com
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"deployMonaco tenant --for alice-smith"* ]]
+}
+@test "byoaUnsolveWorkflow removes only that learner's copy" {
+  undeployMonaco() { echo "undeployMonaco $*"; }
+  run byoaUnsolveWorkflow alice-smith
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"undeployMonaco tenant --for alice-smith"* ]]
+}
+@test "byoaSolveWorkflow refuses an input with no key, and never deploys" {
+  deployMonaco() { echo "DEPLOYED"; }
+  run byoaSolveWorkflow '@@@'
+  [ "$status" -eq 1 ]
+  [[ "$output" != *DEPLOYED* ]]
+}
+@test "the Monaco workflow title is the string step 2.3 tells the learner to type" {
+  local doc="$REPO_PATH/docs/2-3-agentic-workflow.md" wf="$REPO_PATH/monaco/tenant/byoa-workflow/workflow.json"
+  grep -qF '**`{{DT_SEED_SCOPE}} · BYOA triage`**' "$doc"
+  [ "$(jq -r .title "$wf")" = "{{ .learnerKey }} · BYOA triage" ]
+  grep -qF 'startsWith(title, "{{DT_SEED_SCOPE}} · ")' "$doc"
+}
